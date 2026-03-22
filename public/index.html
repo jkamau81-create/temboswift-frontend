@@ -25,7 +25,8 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>React App</title>
-  </head>
+  <style>#crisp-chatbox { bottom: 70px !important; }</style>
+</head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
@@ -39,5 +40,16 @@
       To begin the development, run `npm start` or `yarn start`.
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
-  </body>
+ <script type="text/javascript">
+  window.$crisp=[];
+  window.CRISP_WEBSITE_ID="cad7b1c8-e9cc-4c53-a24e-d542cb27739e";
+  (function(){
+    d=document;
+    s=d.createElement("script");
+    s.src="https://client.crisp.chat/l.js";
+    s.async=1;
+    d.getElementsByTagName("head")[0].appendChild(s);
+  })();
+</script> </body>
 </html>
+

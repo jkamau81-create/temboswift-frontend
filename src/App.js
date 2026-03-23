@@ -347,7 +347,7 @@ function SendMoney({ user }) {
             <div style={{ background: G.surface, borderRadius: 10, padding: 16 }}>
               {quoteLoading ? <div style={{ textAlign: "center", color: G.muted, fontSize: 12, fontFamily: G.mono }}>Fetching live rate...</div> : quote ? [
                 ["Exchange Rate", `1 USD = ${quote.mid_rate} KES`],
-                ["Transfer Fee", `$${quote.fee_usd}`],
+                ["Transfer Fee", "Free ?"],
                 ["Recipient Gets", `KES ${parseFloat(quote.amount_kes).toLocaleString()}`],
               ].map(([k, v], i, a) => (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: i < a.length - 1 ? `1px solid ${G.border}` : "none" }}>
@@ -681,19 +681,25 @@ export default function App() {
     </div>
   );
 }function Support({ user, onLogout, onNavigate }) {
-  const [openFaq, setOpenFaq] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(user && user.full_name || "");
-  const [editPhone, setEditPhone] = useState(user && user.phone || "");
-  const [saving, setSaving] = useState(false);
-  const saveProfile = async () => {
-    setSaving(true);
-    try {
-      const token = localStorage.getItem("ks_token");
-      await fetch("https://temboswift-backend.onrender.com/api/auth/me", { method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify({ full_name: editName, phone: editPhone }) });
-      setSaving(false); setEditing(false); window.location.reload();
-    } catch(e) { setSaving(false); }
+  const parseAddress = (addr) => {
+    if (!addr) return { street: "", city: "", state: "", zip: "", country: "United States" };
+    const parts = addr.split(",").map(s => s.trim());
+    return { street: parts[0] || "", city: parts[1] || "", state: parts[2] || "", zip: parts[3] || "", country: parts[4] || "United States" };
   };
+  const [fields, setFields] = useState({ full_name: (user && user.full_name) || "", date_of_birth: (user && user.date_of_birth ? user.date_of_birth.substring(0,10) : ""), ...parseAddress(user && user.address) });
+  const buildAddress = (f) => [f.street, f.city, f.state, f.zip, f.country].filter(Boolean).join(", ");
+  const [phone, setPhone] = useState((user && user.phone) || "");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState("");
+  const tok = localStorage.getItem("ks_token");
+  const hdrs = { "Content-Type": "application/json", Authorization: "Bearer " + tok };
+  const saveProfile = async () => { setProfileSaving(true); try { await fetch("https://temboswift-backend.onrender.com/api/auth/me", { method: "PUT", headers: hdrs, body: JSON.stringify({ ...fields, address: buildAddress(fields) }) }); setProfileMsg("Profile saved!"); setProfileSaving(false); setTimeout(() => { setProfileMsg(""); window.location.reload(); }, 1500); } catch(e) { setProfileSaving(false); } };
+  const sendOtp = async () => { setProfileSaving(true); try { await fetch("https://temboswift-backend.onrender.com/api/auth/phone/send-otp", { method: "POST", headers: hdrs, body: JSON.stringify({ phone }) }); setOtpSent(true); setProfileMsg("Code sent!"); setProfileSaving(false); } catch(e) { setProfileSaving(false); } };
+  const verifyOtp = async () => { setProfileSaving(true); try { const res = await fetch("https://temboswift-backend.onrender.com/api/auth/phone/verify-otp", { method: "POST", headers: hdrs, body: JSON.stringify({ otp }) }); const data = await res.json(); if (data.message) { setProfileMsg("Phone verified!"); setTimeout(() => window.location.reload(), 1500); } else { setProfileMsg("Invalid code"); } setProfileSaving(false); } catch(e) { setProfileSaving(false); } };
+  const [openFaq, setOpenFaq] = useState(null);
+  
   const [activeSection, setActiveSection] = useState(null);
   const faqs = [
     { q: "How long does a transfer take?", a: "Most M-Pesa transfers arrive in under 2 minutes. Bank transfers take 1-2 business days." },
@@ -707,26 +713,44 @@ export default function App() {
   const initials = user?.full_name?.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase() || "U";
   if (activeSection === "personal") return (
     <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>?</button>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Personal Details</div>
-        </div>
-        <button onClick={() => setEditing(!editing)} style={{ background: "transparent", border: "1px solid " + G.border, color: G.green, borderRadius: 6, padding: "6px 14px", fontSize: 12, cursor: "pointer" }}>{editing ? "Cancel" : "Edit"}</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
+        <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>back</button>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Personal Details</div>
       </div>
-      <div style={css.card}>
-        {[["Full Name", user && user.full_name], ["Email Address", user && user.email], ["Mobile Number", user && user.phone ? user.phone : "Not provided"], ["KYC Status", user && user.kyc_status === "approved" ? "Verified" : "Pending"]].map(([k,v]) => (
-          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid " + G.border }}>
-            <span style={{ fontSize: 13, color: G.muted }}>{k}</span>
-            <span style={{ fontSize: 13, color: G.text, fontWeight: 600 }}>{v || "Not set"}</span>
+      {profileMsg && <div style={{ background: G.greenG, border: "1px solid " + G.green, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: G.green, marginBottom: 16 }}>{profileMsg}</div>}
+      <div style={{ ...css.card, marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em", marginBottom: 16 }}>BASIC INFO</div>
+        {[["Full Name", "full_name", "text", "Your legal name"], ["Date of Birth", "date_of_birth", "date", ""]].map(([label, key, type, placeholder]) => (
+          <div key={key} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 6 }}>{label.toUpperCase()}</div>
+            <input type={type} value={fields[key]} onChange={e => setFields(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} style={{ width: "100%", background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
           </div>
         ))}
+        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 10, marginTop: 4 }}>ADDRESS</div>
+        {[["Street Address", "street", "123 Main St"], ["City", "city", "New York"], ["State", "state", "NY"], ["ZIP Code", "zip", "10001"], ["Country", "country", "United States"]].map(([label, key, placeholder]) => (
+          <div key={key} style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 4 }}>{label.toUpperCase()}</div>
+            <input value={fields[key] || ""} onChange={e => setFields(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} style={{ width: "100%", background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+          </div>
+        ))}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 6 }}>EMAIL ADDRESS</div>
+          <div style={{ background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.muted, fontSize: 14 }}>{user && user.email}</div>
+        </div>
+        <button onClick={saveProfile} disabled={profileSaving} style={{ width: "100%", background: G.green, color: "#000", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{profileSaving ? "Saving..." : "Save Changes"}</button>
       </div>
-      {editing && <div style={{ marginTop: 16 }}>
-        <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Full name" style={{ width: "100%", background: G.surface, border: "1px solid " + G.green, borderRadius: 8, padding: "10px 12px", color: G.text, fontSize: 13, marginBottom: 10, boxSizing: "border-box" }} />
-        <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="Phone e.g. +12143045008" style={{ width: "100%", background: G.surface, border: "1px solid " + G.green, borderRadius: 8, padding: "10px 12px", color: G.text, fontSize: 13, marginBottom: 10, boxSizing: "border-box" }} />
-        <button onClick={saveProfile} disabled={saving} style={{ width: "100%", background: G.green, color: "#000", border: "none", borderRadius: 10, padding: 14, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{saving ? "Saving..." : "Save Changes"}</button>
-      </div>}
+      <div style={css.card}>
+        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em", marginBottom: 16 }}>MOBILE NUMBER {user && user.phone_verified ? "Verified" : "Not verified"}</div>
+        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+12143045008" style={{ width: "100%", background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
+        {!otpSent ? (
+          <button onClick={sendOtp} disabled={profileSaving} style={{ width: "100%", background: G.surface, border: "1px solid " + G.green, color: G.green, borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>{profileSaving ? "Sending..." : "Send Verification Code"}</button>
+        ) : (
+          <div>
+            <input value={otp} onChange={e => setOtp(e.target.value)} placeholder="Enter 6-digit code" style={{ width: "100%", background: G.surface, border: "1px solid " + G.green, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 10 }} />
+            <button onClick={verifyOtp} disabled={profileSaving} style={{ width: "100%", background: G.green, color: "#000", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{profileSaving ? "Verifying..." : "Verify Code"}</button>
+          </div>
+        )}
+      </div>
     </div>
   );
     if (activeSection === "limits") return (

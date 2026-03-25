@@ -1,154 +1,179 @@
-import AdminDashboard from './Admin';
 import { useState, useEffect, useCallback } from "react";
 
-// ─── API LAYER ────────────────────────────────────────────────────────────────
-const API_BASE = "https://temboswift-backend.onrender.com/api";
+const API = "https://temboswift-backend.onrender.com/api";
 
-async function apiCall(endpoint, options = {}) {
-  const token = localStorage.getItem("ks_token");
-  const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-  const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers: { ...headers, ...options.headers } });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Request failed");
-  return data;
-}
-
-const api = {
-  register: (body) => apiCall("/auth/register", { method: "POST", body: JSON.stringify(body) }),
-  login:    (body) => apiCall("/auth/login",    { method: "POST", body: JSON.stringify(body) }),
-  me:       ()     => apiCall("/auth/me"),
-  quote:    (amt)  => apiCall(`/transfers/quote?amount=${amt}`),
-  transfers:()     => apiCall("/transfers"),
-  createTransfer: (body) => apiCall("/transfers", { method: "POST", body: JSON.stringify(body) }),
-  recipients: ()   => apiCall("/recipients"),
-  addRecipient: (body) => apiCall("/recipients", { method: "POST", body: JSON.stringify(body) }),
-  deleteRecipient: (id) => apiCall(`/recipients/${id}`, { method: "DELETE" }),
-};
-
-// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+// ── Theme ──────────────────────────────────────────────────────────────────
 const G = {
-  bg: "#07090c", surface: "#0c1017", card: "#111820",
-  border: "#1c2a35", borderB: "#253545",
-  green: "#00e676", greenD: "#00b85a", greenG: "rgba(0,230,118,0.12)",
-  blue: "#38bdf8", orange: "#fb923c", red: "#f87171", yellow: "#fbbf24",
-  text: "#e2edf5", muted: "#4a6375",
-  font: "'DM Sans', sans-serif", mono: "'JetBrains Mono', monospace",
+  green: "#0b5e35", greenDark: "#093d28", greenLight: "#f0faf5",
+  greenMid: "#1a7a4a", acc: "#f5a623",
+  bg: "#f5f0e8", white: "#ffffff", card: "#ffffff",
+  border: "#e8e3d8", borderLight: "#f0ebe0",
+  text: "#111111", muted: "#666666", light: "#999999",
+  red: "#dc2626", redLight: "#fef2f2",
+  blue: "#2563eb", blueLight: "#eff6ff",
+  font: "'DM Sans', sans-serif",
 };
 
-const css = {
-  app: { minHeight: "100vh", background: G.bg, color: G.text, fontFamily: G.font, display: "flex", flexDirection: "column" },
-  shell: { display: "flex", flex: 1, minHeight: 0 },
-  sidebar: { width: 220, background: G.surface, borderRight: `1px solid ${G.border}`, display: "flex", flexDirection: "column", padding: "0 0 24px", flexShrink: 0 },
-  main: { flex: 1, overflowY: "auto", padding: "32px 40px" },
-  navItem: (a) => ({ display: "flex", alignItems: "center", gap: 10, padding: "10px 24px", cursor: "pointer", fontSize: 13, fontWeight: a ? 600 : 400, color: a ? G.green : G.muted, background: a ? "rgba(0,230,118,0.07)" : "transparent", borderLeft: a ? `2px solid ${G.green}` : "2px solid transparent", transition: "all 0.15s", userSelect: "none" }),
-  topbar: { background: G.surface, borderBottom: `1px solid ${G.border}`, padding: "0 40px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
-  card: { background: G.card, border: `1px solid ${G.border}`, borderRadius: 12, padding: 24 },
-  btnPrimary: { background: G.green, color: "#000", border: "none", borderRadius: 8, padding: "12px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: G.font, transition: "opacity 0.15s", width: "100%" },
-  btnSecondary: { background: "transparent", color: G.text, border: `1px solid ${G.border}`, borderRadius: 8, padding: "11px 24px", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: G.font, transition: "border-color 0.15s", width: "100%" },
-  inputGroup: { marginBottom: 18 },
-  label: { display: "block", fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 6, letterSpacing: "0.08em", textTransform: "uppercase" },
-  input: { width: "100%", background: G.surface, border: `1px solid ${G.border}`, borderRadius: 8, padding: "11px 14px", fontSize: 14, color: G.text, fontFamily: G.font, outline: "none", boxSizing: "border-box", transition: "border-color 0.15s" },
+// ── API ────────────────────────────────────────────────────────────────────
+const api = {
+  async req(path, opts = {}) {
+    const token = localStorage.getItem("ts_token");
+    const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+    const res = await fetch(`${API}${path}`, { ...opts, headers: { ...headers, ...opts.headers } });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Request failed");
+    return data;
+  },
+  login: (body) => api.req("/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  register: (body) => api.req("/auth/register", { method: "POST", body: JSON.stringify(body) }),
+  me: () => api.req("/auth/me"),
+  updateMe: (body) => api.req("/auth/me", { method: "PUT", body: JSON.stringify(body) }),
+  quote: (amount) => api.req(`/transfers/quote?amount=${amount}`),
+  createTransfer: (body) => api.req("/transfers", { method: "POST", body: JSON.stringify(body) }),
+  transfers: () => api.req("/transfers"),
+  recipients: () => api.req("/recipients"),
+  addRecipient: (body) => api.req("/recipients", { method: "POST", body: JSON.stringify(body) }),
+  deleteRecipient: (id) => api.req(`/recipients/${id}`, { method: "DELETE" }),
+  kycStart: () => api.req("/kyc/start", { method: "POST" }),
+  kycStatus: () => api.req("/kyc/status"),
+  sendOtp: (phone) => api.req("/auth/phone/send-otp", { method: "POST", body: JSON.stringify({ phone }) }),
+  verifyOtp: (otp) => api.req("/auth/phone/verify-otp", { method: "POST", body: JSON.stringify({ otp }) }),
 };
 
-// ─── SHARED UI ────────────────────────────────────────────────────────────────
-function Avatar({ initials, color, size = 36 }) {
-  return <div style={{ width: size, height: size, borderRadius: "50%", background: color + "22", border: `1px solid ${color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.33, fontWeight: 700, color, flexShrink: 0 }}>{initials}</div>;
-}
+// ── Helpers ────────────────────────────────────────────────────────────────
+const statusConfig = {
+  delivered: { color: G.green, bg: "#dcfce7", label: "Delivered", icon: "fa-check-circle" },
+  pending: { color: "#92400e", bg: "#fef3c7", label: "Pending", icon: "fa-clock" },
+  processing: { color: "#1d4ed8", bg: "#dbeafe", label: "Processing", icon: "fa-spinner" },
+  funded: { color: "#1d4ed8", bg: "#dbeafe", label: "Funded", icon: "fa-dollar-sign" },
+  failed: { color: G.red, bg: G.redLight, label: "Failed", icon: "fa-times-circle" },
+};
 
-function StatusBadge({ status }) {
-  const map = { delivered: { bg: "rgba(0,230,118,0.1)", color: G.green, text: "Delivered" }, pending: { bg: "rgba(251,191,36,0.1)", color: G.yellow, text: "Pending" }, failed: { bg: "rgba(248,113,113,0.1)", color: G.red, text: "Failed" }, funded: { bg: "rgba(41,182,246,0.1)", color: G.blue, text: "Funded" }, processing: { bg: "rgba(251,191,36,0.1)", color: G.yellow, text: "Processing" } };
-  const s = map[status] || map.pending;
-  return <span style={{ background: s.bg, color: s.color, fontSize: 10, fontFamily: G.mono, fontWeight: 500, padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{s.text}</span>;
-}
-
-function Input({ label, type = "text", placeholder, value, onChange, hint }) {
-  const [focused, setFocused] = useState(false);
+const Avatar = ({ name, size = 40, bg = G.green }) => {
+  const initials = (name || "?").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   return (
-    <div style={css.inputGroup}>
-      {label && <label style={css.label}>{label}</label>}
-      <input type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)}
-        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-        style={{ ...css.input, borderColor: focused ? G.green : G.border }} />
-      {hint && <div style={{ fontSize: 10, color: G.muted, marginTop: 5, fontFamily: G.mono }}>{hint}</div>}
+    <div style={{ width: size, height: size, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: size * 0.35, fontWeight: 700, flexShrink: 0 }}>
+      {initials}
     </div>
   );
-}
+};
 
-function ErrorBox({ msg }) {
-  if (!msg) return null;
-  return <div style={{ background: "rgba(248,113,113,0.1)", border: `1px solid rgba(248,113,113,0.3)`, borderRadius: 8, padding: "10px 14px", fontSize: 12, color: G.red, fontFamily: G.mono, marginBottom: 16 }}>⚠ {msg}</div>;
-}
+const StatusBadge = ({ status }) => {
+  const cfg = statusConfig[status] || statusConfig.pending;
+  return (
+    <span style={{ background: cfg.bg, color: cfg.color, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 100, display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <i className={`fas ${cfg.icon}`} style={{ fontSize: 10 }}></i>
+      {cfg.label}
+    </span>
+  );
+};
 
-function Spinner() {
-  return <div style={{ textAlign: "center", padding: 40, color: G.muted, fontSize: 13, fontFamily: G.mono }}>Loading...</div>;
-}
+const Btn = ({ children, onClick, variant = "primary", disabled, full, small, style = {} }) => {
+  const styles = {
+    primary: { background: G.green, color: "#fff", border: "none" },
+    outline: { background: "transparent", color: G.green, border: `1.5px solid ${G.green}` },
+    ghost: { background: "transparent", color: G.muted, border: `1px solid ${G.border}` },
+    danger: { background: G.red, color: "#fff", border: "none" },
+  };
+  return (
+    <button onClick={onClick} disabled={disabled}
+      style={{ ...styles[variant], padding: small ? "8px 16px" : "12px 20px", borderRadius: 100, fontSize: small ? 13 : 15, fontWeight: 700, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.6 : 1, width: full ? "100%" : "auto", fontFamily: G.font, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "transform 0.15s", ...style }}>
+      {children}
+    </button>
+  );
+};
 
-// ─── AUTH PAGE ────────────────────────────────────────────────────────────────
-function AuthPage({ onLogin }) {
+const Input = ({ label, icon, ...props }) => (
+  <div style={{ marginBottom: 16 }}>
+    {label && <div style={{ fontSize: 12, fontWeight: 600, color: G.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>}
+    <div style={{ position: "relative" }}>
+      {icon && <i className={`fas ${icon}`} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: G.muted, fontSize: 14 }}></i>}
+      <input {...props} style={{ width: "100%", background: "#fff", border: `1.5px solid ${G.border}`, borderRadius: 10, padding: icon ? "12px 14px 12px 40px" : "12px 14px", fontSize: 15, color: G.text, outline: "none", fontFamily: G.font, transition: "border-color 0.2s", boxSizing: "border-box", ...props.style }}
+        onFocus={e => e.target.style.borderColor = G.green}
+        onBlur={e => e.target.style.borderColor = G.border}
+      />
+    </div>
+  </div>
+);
+
+const Card = ({ children, style = {} }) => (
+  <div style={{ background: G.white, borderRadius: 16, border: `1px solid ${G.border}`, padding: 20, ...style }}>
+    {children}
+  </div>
+);
+
+// ── AUTH SCREEN ────────────────────────────────────────────────────────────
+function AuthScreen({ onLogin }) {
   const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ email: "", password: "", full_name: "", phone: "" });
-  const [error, setError] = useState("");
+  const [form, setForm] = useState({ email: "", password: "", full_name: "" });
   const [loading, setLoading] = useState(false);
-  const set = k => v => setForm(f => ({ ...f, [k]: v }));
+  const [error, setError] = useState("");
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  const handleSubmit = async () => {
-    setError(""); setLoading(true);
+  const submit = async () => {
+    setLoading(true); setError("");
     try {
       const data = mode === "login"
         ? await api.login({ email: form.email, password: form.password })
-        : await api.register({ email: form.email, password: form.password, full_name: form.full_name, phone: form.phone });
-      localStorage.setItem("ks_token", data.token);
+        : await api.register(form);
+      localStorage.setItem("ts_token", data.token);
       onLogin(data.user);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: G.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: G.font, padding: 24 }}>
-      <div style={{ position: "fixed", top: -200, right: -200, width: 600, height: 600, borderRadius: "50%", background: "radial-gradient(circle, rgba(0,230,118,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
+    <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${G.greenDark} 0%, ${G.greenMid} 50%, ${G.greenDark} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: G.font }}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
       <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ width: 52, height: 52, background: G.green, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 12px", boxShadow: `0 0 32px ${G.greenG}` }}>💸</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", letterSpacing: "-0.5px" }}>Tembo<span style={{ color: G.green }}>Swift</span></div>
-          <div style={{ fontSize: 12, color: G.muted, marginTop: 4, fontFamily: G.mono }}>Fast · Transparent · Reliable</div>
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ width: 64, height: 64, background: "rgba(255,255,255,0.1)", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", border: "1px solid rgba(255,255,255,0.2)" }}>
+            <i className="fas fa-paper-plane" style={{ fontSize: 28, color: "#4cde8f" }}></i>
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", fontFamily: "'Playfair Display', serif" }}>
+            Tembo<span style={{ color: "#4cde8f" }}>Swift</span>
+          </div>
+          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", marginTop: 4 }}>US → Kenya · Zero Fees · Best Rates</div>
         </div>
-        <div style={{ ...css.card, padding: 32 }}>
-          <div style={{ display: "flex", background: G.surface, borderRadius: 8, padding: 3, marginBottom: 28 }}>
-            {["login", "signup"].map(m => (
-              <button key={m} onClick={() => { setMode(m); setError(""); }}
-                style={{ flex: 1, padding: 8, border: "none", borderRadius: 6, cursor: "pointer", background: mode === m ? G.card : "transparent", color: mode === m ? G.text : G.muted, fontSize: 13, fontWeight: mode === m ? 600 : 400, fontFamily: G.font, transition: "all 0.2s" }}>
-                {m === "login" ? "Sign In" : "Sign Up"}
+
+        <Card style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+          {/* Tabs */}
+          <div style={{ display: "flex", background: G.bg, borderRadius: 10, padding: 4, marginBottom: 24 }}>
+            {["login", "register"].map(m => (
+              <button key={m} onClick={() => setMode(m)}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: mode === m ? G.white : "transparent", color: mode === m ? G.text : G.muted, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: G.font, boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.1)" : "none", transition: "all 0.2s" }}>
+                {m === "login" ? "Sign In" : "Create Account"}
               </button>
             ))}
           </div>
-          <ErrorBox msg={error} />
-          {mode === "signup" && <Input label="Full Name" placeholder="John Otieno" value={form.full_name} onChange={set("full_name")} />}
-          {mode === "signup" && <Input label="Phone" type="tel" placeholder="+1 555 000 0000" value={form.phone} onChange={set("phone")} />}
-          <Input label="Email" type="email" placeholder="john@example.com" value={form.email} onChange={set("email")} />
-          <Input label="Password" type="password" placeholder="••••••••" value={form.password} onChange={set("password")} />
-          <button onClick={handleSubmit} disabled={loading} style={{ ...css.btnPrimary, opacity: loading ? 0.7 : 1, marginTop: 4 }}>
-            {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
-          </button>
-          <div style={{ textAlign: "center", fontSize: 12, color: G.muted, marginTop: 20, fontFamily: G.mono }}>
-            {mode === "login" ? "New here? " : "Have an account? "}
-            <span style={{ color: G.green, cursor: "pointer" }} onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
-              {mode === "login" ? "Create an account" : "Sign in"}
-            </span>
-          </div>
-        </div>
-        <div style={{ textAlign: "center", marginTop: 24, fontSize: 10, color: G.muted, fontFamily: G.mono }}>
-          Regulated · FinCEN Registered · 256-bit Encrypted
+
+          {error && (
+            <div style={{ background: G.redLight, border: `1px solid ${G.red}22`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: G.red, display: "flex", alignItems: "center", gap: 8 }}>
+              <i className="fas fa-exclamation-circle"></i> {error}
+            </div>
+          )}
+
+          {mode === "register" && <Input label="Full Name" icon="fa-user" placeholder="Joseph Kamau" value={form.full_name} onChange={set("full_name")} />}
+          <Input label="Email Address" icon="fa-envelope" type="email" placeholder="you@example.com" value={form.email} onChange={set("email")} />
+          <Input label="Password" icon="fa-lock" type="password" placeholder="••••••••" value={form.password} onChange={set("password")} onKeyDown={e => e.key === "Enter" && submit()} />
+
+          <Btn onClick={submit} disabled={loading} full style={{ marginTop: 8 }}>
+            {loading ? <><i className="fas fa-spinner fa-spin"></i> Please wait...</> : mode === "login" ? <><i className="fas fa-sign-in-alt"></i> Sign In</> : <><i className="fas fa-user-plus"></i> Create Account</>}
+          </Btn>
+        </Card>
+
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+          <i className="fas fa-shield-alt"></i> 256-bit encrypted · FinCEN registered · Your money is safe
         </div>
       </div>
     </div>
   );
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard({ user, onNavigate }) {
+// ── DASHBOARD ──────────────────────────────────────────────────────────────
+function Dashboard({ user, setPage }) {
   const [transfers, setTransfers] = useState([]);
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -160,751 +185,763 @@ function Dashboard({ user, onNavigate }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalSent = transfers.filter(t => t.status === "delivered").reduce((a, t) => a + parseFloat(t.amount_usd), 0);
-  const recentTx = transfers.slice(0, 3);
-  const colors = ["#00e676", "#29b6f6", "#fb923c", "#a78bfa", "#34d399"];
+  const totalSent = transfers.filter(t => t.status === "delivered").reduce((a, t) => a + parseFloat(t.amount_usd || 0), 0);
+  const recent = transfers.slice(0, 3);
 
   return (
-    <div>
-      <div style={{ background: "linear-gradient(135deg, #0a1f12 0%, #0c1a25 100%)", border: `1px solid ${G.border}`, borderRadius: 16, padding: 28, marginBottom: 24, position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: "50%", background: "rgba(0,230,118,0.06)" }} />
-        <div style={{ fontSize: 12, color: G.muted, fontFamily: G.mono, marginBottom: 6 }}>WELCOME BACK</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", marginBottom: 16 }}>{user.full_name?.split(" ")[0]} 👋</div>
-        <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+    <div style={{ fontFamily: G.font }}>
+      {/* Welcome */}
+      <div style={{ background: `linear-gradient(135deg, ${G.greenDark}, ${G.greenMid})`, borderRadius: 20, padding: 24, marginBottom: 20, color: "#fff", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", right: -20, top: -20, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }}></div>
+        <div style={{ position: "absolute", right: 20, bottom: -30, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }}></div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>Welcome back 👋</div>
+        <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 16 }}>{user?.full_name?.split(" ")[0] || "there"}</div>
+        <div style={{ display: "flex", gap: 20 }}>
           <div>
-            <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 4, letterSpacing: "0.1em" }}>TOTAL SENT</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: G.green, fontFamily: G.mono }}>${totalSent.toFixed(0)}</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>TOTAL SENT</div>
+            <div style={{ fontSize: 26, fontWeight: 900 }}>${totalSent.toFixed(0)}</div>
           </div>
+          <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }}></div>
           <div>
-            <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 4, letterSpacing: "0.1em" }}>TRANSFERS</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: "#fff", fontFamily: G.mono }}>{transfers.length}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 4, letterSpacing: "0.1em" }}>LIVE RATE</div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: G.blue, fontFamily: G.mono }}>
-              {quote ? `1 USD = ${quote.mid_rate} KES` : "Loading..."}
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.65)", marginBottom: 2 }}>LIVE RATE</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#4cde8f" }}>
+              1 USD = {quote ? parseFloat(quote.client_rate).toFixed(1) : "..."} KES
             </div>
           </div>
         </div>
-        {user.kyc_status !== "approved" && (
-          <div style={{ marginTop: 16, background: "rgba(251,191,36,0.1)", border: "1px solid rgba(251,191,36,0.3)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: G.yellow, fontFamily: G.mono }}>
-            ⚠ KYC verification required to send money — complete it in Settings
+      </div>
+
+      {/* KYC warning */}
+      {user?.kyc_status !== "approved" && (
+        <div style={{ background: "#fef3c7", border: "1px solid #f59e0b33", borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+          <i className="fas fa-exclamation-triangle" style={{ color: "#d97706", fontSize: 18, flexShrink: 0 }}></i>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e" }}>Identity verification required</div>
+            <div style={{ fontSize: 12, color: "#78350f" }}>Complete KYC to send money</div>
           </div>
-        )}
-        <button onClick={() => onNavigate("send")} style={{ ...css.btnPrimary, width: "auto", marginTop: 20, padding: "12px 28px" }}>
-          Send Money →
+          <button onClick={() => setPage("account")} style={{ background: "#d97706", color: "#fff", border: "none", borderRadius: 100, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Verify →</button>
+        </div>
+      )}
+
+      {/* Quick actions */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <button onClick={() => setPage("send")} style={{ background: G.green, color: "#fff", border: "none", borderRadius: 14, padding: 16, cursor: "pointer", textAlign: "left", fontFamily: G.font }}>
+          <i className="fas fa-paper-plane" style={{ fontSize: 22, marginBottom: 8, display: "block" }}></i>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Send Money</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>US → Kenya</div>
+        </button>
+        <button onClick={() => setPage("recipients")} style={{ background: G.white, color: G.text, border: `1px solid ${G.border}`, borderRadius: 14, padding: 16, cursor: "pointer", textAlign: "left", fontFamily: G.font }}>
+          <i className="fas fa-users" style={{ fontSize: 22, color: G.green, marginBottom: 8, display: "block" }}></i>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Recipients</div>
+          <div style={{ fontSize: 12, color: G.muted }}>Manage contacts</div>
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 24 }}>
-        {[{ icon: "💸", label: "Send", nav: "send", color: G.green }, { icon: "👥", label: "Recipients", nav: "recipients", color: G.blue }, { icon: "📋", label: "History", nav: "history", color: G.orange }].map(a => (
-          <div key={a.nav} onClick={() => onNavigate(a.nav)}
-            style={{ ...css.card, textAlign: "center", cursor: "pointer", transition: "border-color 0.2s, transform 0.15s", padding: "20px 12px" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = a.color; e.currentTarget.style.transform = "translateY(-2px)"; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = G.border; e.currentTarget.style.transform = "translateY(0)"; }}>
-            <div style={{ fontSize: 24, marginBottom: 8 }}>{a.icon}</div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>{a.label}</div>
+      {/* Live rate card */}
+      {quote && (
+        <Card style={{ marginBottom: 20, background: G.greenLight, border: `1px solid ${G.green}22` }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: G.green, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
+            <i className="fas fa-chart-line"></i> Live Exchange Rate
           </div>
-        ))}
-      </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: G.green }}>1 USD = {parseFloat(quote.client_rate).toFixed(2)} KES</div>
+              <div style={{ fontSize: 12, color: G.muted, marginTop: 4 }}>No transfer fees · Best rate in market</div>
+            </div>
+            <Btn onClick={() => setPage("send")} small><i className="fas fa-arrow-right"></i> Send Now</Btn>
+          </div>
+        </Card>
+      )}
 
-      <div style={css.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>Recent Transfers</div>
-          <span onClick={() => onNavigate("history")} style={{ fontSize: 12, color: G.green, cursor: "pointer" }}>View all →</span>
-        </div>
-        {loading ? <Spinner /> : recentTx.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 32, color: G.muted, fontSize: 13 }}>No transfers yet — send your first one!</div>
-        ) : recentTx.map((tx, i) => (
-          <div key={tx.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: i < recentTx.length - 1 ? `1px solid ${G.border}` : "none" }}>
-            <Avatar initials={(tx.recipient_name || "??").split(" ").map(w => w[0]).join("").slice(0, 2)} color={colors[i % colors.length]} size={38} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{tx.recipient_name}</div>
-              <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginTop: 2 }}>{new Date(tx.created_at).toLocaleDateString()} · {tx.delivery_method}</div>
-            </div>
-            <div style={{ textAlign: "right", marginRight: 10 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: G.mono }}>-${parseFloat(tx.amount_usd).toFixed(0)}</div>
-              <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono }}>KES {parseFloat(tx.amount_kes).toLocaleString()}</div>
-            </div>
+      {/* Recent transfers */}
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span><i className="fas fa-history" style={{ color: G.green, marginRight: 8 }}></i>Recent Transfers</span>
+        <button onClick={() => setPage("history")} style={{ background: "none", border: "none", color: G.green, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>See all</button>
+      </div>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 32, color: G.muted }}><i className="fas fa-spinner fa-spin" style={{ fontSize: 24 }}></i></div>
+      ) : recent.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: 32, color: G.muted }}>
+          <i className="fas fa-paper-plane" style={{ fontSize: 32, color: G.border, marginBottom: 12, display: "block" }}></i>
+          No transfers yet. Send your first transfer!
+        </Card>
+      ) : recent.map(tx => (
+        <Card key={tx.id} style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 44, height: 44, background: G.greenLight, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <i className="fas fa-paper-plane" style={{ color: G.green, fontSize: 18 }}></i>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{tx.recipient_name || "Recipient"}</div>
+            <div style={{ fontSize: 12, color: G.muted }}>{new Date(tx.created_at).toLocaleDateString()}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>-${parseFloat(tx.amount_usd).toFixed(0)}</div>
             <StatusBadge status={tx.status} />
           </div>
-        ))}
-      </div>
+        </Card>
+      ))}
     </div>
   );
 }
 
-// ─── SEND MONEY ───────────────────────────────────────────────────────────────
+// ── SEND MONEY ─────────────────────────────────────────────────────────────
 function SendMoney({ user }) {
   const [step, setStep] = useState(1);
   const [usd, setUsd] = useState("200");
   const [quote, setQuote] = useState(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [recipients, setRecipients] = useState([]);
-  const [recipientId, setRecipientId] = useState(null);
-  const [method, setMethod] = useState("mpesa");
+  const [selectedId, setSelectedId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [transfer, setTransfer] = useState(null);
-
-  useEffect(() => { api.recipients().then(r => { setRecipients(r.recipients || []); if (r.recipients?.length) setRecipientId(r.recipients[0].id); }); }, []);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!usd || parseFloat(usd) < 5) return;
+    api.recipients().then(d => {
+      setRecipients(d.recipients || []);
+      if (d.recipients?.length) setSelectedId(d.recipients[0].id);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const amt = parseFloat(usd);
+    if (!amt || amt < 5) return;
     setQuoteLoading(true);
-    const timer = setTimeout(() => {
-      api.quote(usd).then(setQuote).catch(() => {}).finally(() => setQuoteLoading(false));
-    }, 500);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => {
+      api.quote(amt).then(setQuote).catch(() => {}).finally(() => setQuoteLoading(false));
+    }, 600);
+    return () => clearTimeout(t);
   }, [usd]);
 
-  const recipient = recipients.find(r => r.id === recipientId);
-  const colors = ["#00e676", "#29b6f6", "#fb923c", "#a78bfa"];
-
-  const handleCreate = async () => {
-    if (!recipientId) return setError("Please select a recipient");
-    if (user.kyc_status !== "approved") return setError("KYC verification required. Please complete identity verification first.");
-    setError(""); setLoading(true);
+  const send = async () => {
+    if (user?.kyc_status !== "approved") { setError("KYC verification required. Go to Account → Verify Identity."); return; }
+    setLoading(true); setError("");
     try {
-      const data = await api.createTransfer({ recipient_id: recipientId, amount_usd: parseFloat(usd) });
-      setTransfer(data);
-      setStep(4);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      await api.createTransfer({ recipient_id: selectedId, amount_usd: parseFloat(usd) });
+      setSuccess(true);
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
   };
 
-  if (step === 4 && transfer) return (
-    <div style={{ maxWidth: 480, margin: "0 auto", textAlign: "center", paddingTop: 40 }}>
-      <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 8 }}>Transfer Created!</div>
-      <div style={{ fontSize: 13, color: G.muted, fontFamily: G.mono, marginBottom: 24 }}>
-        Payment pending — complete it with Stripe below
+  if (success) return (
+    <div style={{ textAlign: "center", padding: "48px 20px", fontFamily: G.font }}>
+      <div style={{ width: 80, height: 80, background: G.greenLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+        <i className="fas fa-check-circle" style={{ fontSize: 40, color: G.green }}></i>
       </div>
-      <div style={{ ...css.card, marginBottom: 20, textAlign: "left" }}>
-        {[
-          ["Transfer ID", transfer.transfer?.id?.slice(0, 8) + "..."],
-          ["Amount", `$${transfer.quote?.amount_usd} USD`],
-          ["Fee", `$${transfer.quote?.fee_usd}`],
-          ["Rate", `1 USD = ${transfer.quote?.client_rate} KES`],
-          ["Recipient Gets", `KES ${parseFloat(transfer.quote?.amount_kes).toLocaleString()}`],
-          ["Status", transfer.transfer?.status],
-        ].map(([k, v]) => (
-          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${G.border}` }}>
-            <span style={{ fontSize: 12, color: G.muted, fontFamily: G.mono }}>{k}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: G.text }}>{v}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ background: "rgba(0,230,118,0.08)", border: `1px solid rgba(0,230,118,0.2)`, borderRadius: 8, padding: "12px 14px", fontSize: 11, color: G.green, fontFamily: G.mono, marginBottom: 20 }}>
-        ✓ Transfer queued · Payment required to process payout
-      </div>
-      <button onClick={() => { setStep(1); setTransfer(null); }} style={css.btnPrimary}>Send Another Transfer</button>
+      <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Transfer Created!</div>
+      <div style={{ fontSize: 15, color: G.muted, marginBottom: 32 }}>Your transfer is being processed and will arrive shortly.</div>
+      <Btn onClick={() => { setSuccess(false); setStep(1); setUsd("200"); }}>
+        <i className="fas fa-plus"></i> Send Another
+      </Btn>
     </div>
   );
 
   return (
-    <div style={{ maxWidth: 560, margin: "0 auto" }}>
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Send Money</div>
-        <div style={{ fontSize: 12, color: G.muted, fontFamily: G.mono }}>🇺🇸 USD → 🇰🇪 KES · M-Pesa or Bank</div>
-      </div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 28 }}>
-        {["Amount", "Recipient", "Confirm"].map((s, i) => (
-          <div key={s} style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: step > i+1 ? G.green : step === i+1 ? G.greenG : G.surface, border: `1px solid ${step >= i+1 ? G.green : G.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: step > i+1 ? "#000" : step === i+1 ? G.green : G.muted, fontFamily: G.mono }}>
-              {step > i+1 ? "✓" : i+1}
-            </div>
-            <div style={{ fontSize: 11, color: step === i+1 ? G.text : G.muted, fontWeight: step === i+1 ? 600 : 400 }}>{s}</div>
-            {i < 2 && <div style={{ flex: 1, height: 1, background: step > i+1 ? G.green : G.border }} />}
-          </div>
+    <div style={{ fontFamily: G.font }}>
+      {/* Progress */}
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 24, gap: 8 }}>
+        {[1, 2, 3].map((s, i) => (
+          <>
+            <div key={s} style={{ width: 28, height: 28, borderRadius: "50%", background: step >= s ? G.green : G.border, color: step >= s ? "#fff" : G.muted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{step > s ? <i className="fas fa-check"></i> : s}</div>
+            {i < 2 && <div style={{ flex: 1, height: 2, background: step > s ? G.green : G.border, borderRadius: 1 }}></div>}
+          </>
         ))}
       </div>
 
-      <div style={css.card}>
-        <ErrorBox msg={error} />
+      {error && <div style={{ background: G.redLight, border: `1px solid ${G.red}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: G.red, display: "flex", gap: 8, alignItems: "center" }}><i className="fas fa-exclamation-circle"></i> {error}</div>}
 
-        {step === 1 && (
-          <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 20 }}>How much to send?</div>
-            <div style={{ background: G.surface, border: `1px solid ${G.border}`, borderRadius: 10, padding: 20, marginBottom: 16, textAlign: "center" }}>
-              <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 8, letterSpacing: "0.1em" }}>YOU SEND (USD)</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                <span style={{ fontSize: 28, fontWeight: 800, color: G.muted }}>$</span>
-                <input type="number" value={usd} onChange={e => setUsd(e.target.value)}
-                  style={{ background: "transparent", border: "none", outline: "none", fontSize: 48, fontWeight: 800, color: "#fff", fontFamily: G.mono, width: 180, textAlign: "center" }} />
-              </div>
+      {step === 1 && (
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-dollar-sign" style={{ color: G.green, marginRight: 8 }}></i>How much to send?</div>
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: G.muted, marginBottom: 8, fontWeight: 600 }}>YOU SEND (USD)</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <span style={{ fontSize: 32, fontWeight: 900, color: G.green }}>$</span>
+              <input value={usd} onChange={e => setUsd(e.target.value)} type="number" style={{ flex: 1, border: "none", outline: "none", fontSize: 48, fontWeight: 900, color: G.text, fontFamily: G.font, background: "transparent" }} />
             </div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {[50, 100, 200, 500].map(n => (
                 <button key={n} onClick={() => setUsd(String(n))}
-                  style={{ flex: 1, padding: 8, border: `1px solid ${usd == n ? G.green : G.border}`, background: usd == n ? G.greenG : "transparent", color: usd == n ? G.green : G.muted, borderRadius: 6, cursor: "pointer", fontFamily: G.mono, fontSize: 12, fontWeight: 600 }}>${n}</button>
+                  style={{ padding: "6px 14px", borderRadius: 100, border: `1.5px solid ${usd === String(n) ? G.green : G.border}`, background: usd === String(n) ? G.greenLight : "transparent", color: usd === String(n) ? G.green : G.muted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: G.font }}>
+                  ${n}
+                </button>
               ))}
             </div>
-            <div style={{ background: G.surface, borderRadius: 10, padding: 16 }}>
-              {quoteLoading ? <div style={{ textAlign: "center", color: G.muted, fontSize: 12, fontFamily: G.mono }}>Fetching live rate...</div> : quote ? [
-                ["Exchange Rate", `1 USD = ${quote.mid_rate} KES`],
-                ["Transfer Fee", "Free ?"],
-                ["Recipient Gets", `KES ${parseFloat(quote.amount_kes).toLocaleString()}`],
-              ].map(([k, v], i, a) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: i < a.length - 1 ? `1px solid ${G.border}` : "none" }}>
-                  <span style={{ fontSize: 12, color: G.muted, fontFamily: G.mono }}>{k}</span>
-                  <span style={{ fontSize: 12, fontWeight: i === 2 ? 700 : 600, color: i === 2 ? G.green : G.text }}>{v}</span>
-                </div>
-              )) : null}
-            </div>
-            <div style={{ height: 20 }} />
-            <button onClick={() => setStep(2)} disabled={!quote || parseFloat(usd) < 5} style={{ ...css.btnPrimary, opacity: !quote || parseFloat(usd) < 5 ? 0.4 : 1 }}>Continue →</button>
-          </>
-        )}
+          </Card>
 
-        {step === 2 && (
-          <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 20 }}>Who are you sending to?</div>
-            {recipients.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 32, color: G.muted, fontSize: 13 }}>No recipients yet — add one in the Recipients tab first.</div>
-            ) : recipients.map((r, i) => (
-              <div key={r.id} onClick={() => setRecipientId(r.id)}
-                style={{ display: "flex", alignItems: "center", gap: 14, padding: 14, borderRadius: 10, marginBottom: 8, border: `1px solid ${recipientId === r.id ? G.green : G.border}`, background: recipientId === r.id ? G.greenG : "transparent", cursor: "pointer", transition: "all 0.15s" }}>
-                <Avatar initials={r.full_name.split(" ").map(w => w[0]).join("").slice(0, 2)} color={colors[i % colors.length]} size={40} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{r.full_name}</div>
-                  <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginTop: 2 }}>{r.phone} · {r.delivery_method}</div>
-                </div>
-                {recipientId === r.id && <span style={{ color: G.green, fontSize: 18 }}>✓</span>}
-              </div>
-            ))}
-            <div style={{ height: 16 }} />
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setStep(1)} style={{ ...css.btnSecondary, flex: 1 }}>← Back</button>
-              <button onClick={() => setStep(3)} disabled={!recipientId} style={{ ...css.btnPrimary, flex: 2, opacity: !recipientId ? 0.4 : 1 }}>Review Transfer →</button>
-            </div>
-          </>
-        )}
-
-        {step === 3 && recipient && (
-          <>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 20 }}>Review & Confirm</div>
-            <div style={{ background: G.surface, borderRadius: 10, padding: 16, marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingBottom: 14, borderBottom: `1px solid ${G.border}`, marginBottom: 14 }}>
-                <Avatar initials={recipient.full_name.split(" ").map(w => w[0]).join("").slice(0, 2)} color={G.green} size={44} />
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>{recipient.full_name}</div>
-                  <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono }}>{recipient.phone}</div>
-                </div>
-              </div>
+          {quoteLoading && <div style={{ textAlign: "center", padding: 16, color: G.muted }}><i className="fas fa-spinner fa-spin"></i> Getting live rate...</div>}
+          {quote && !quoteLoading && (
+            <Card style={{ background: G.greenLight, border: `1px solid ${G.green}22`, marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: G.green, marginBottom: 12 }}><i className="fas fa-chart-line"></i> Quote Summary</div>
               {[
-                ["You Pay", `$${usd} USD`],
-                ["Fee", `$${quote?.fee_usd}`],
-                ["Rate", `1 USD = ${quote?.client_rate} KES`],
-                ["Recipient Gets", `KES ${parseFloat(quote?.amount_kes || 0).toLocaleString()}`],
-                ["Delivery", recipient.delivery_method === "mpesa" ? "M-Pesa · ~2 mins" : "Bank · 1-2 days"],
-              ].map(([k, v], i, a) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < a.length - 1 ? `1px solid ${G.border}` : "none" }}>
-                  <span style={{ fontSize: 12, color: G.muted, fontFamily: G.mono }}>{k}</span>
-                  <span style={{ fontSize: 12, fontWeight: i === 3 ? 700 : 600, color: i === 3 ? G.green : G.text }}>{v}</span>
+                ["Exchange Rate", `1 USD = ${parseFloat(quote.client_rate).toFixed(2)} KES`, G.green],
+                ["Transfer Fee", "Free ✓", G.green],
+                ["Recipient Gets", `KES ${parseFloat(quote.amount_kes).toLocaleString()}`, G.text],
+              ].map(([k, v, c]) => (
+                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${G.border}` }}>
+                  <span style={{ fontSize: 13, color: G.muted }}>{k}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: c }}>{v}</span>
                 </div>
               ))}
-            </div>
-            <div style={{ background: "rgba(0,230,118,0.05)", border: `1px solid rgba(0,230,118,0.2)`, borderRadius: 8, padding: "12px 14px", fontSize: 11, color: G.green, fontFamily: G.mono, marginBottom: 20 }}>
-              ✓ Sanctions check · ✓ Fraud scoring · ✓ AML velocity check — all run on payment
-            </div>
+            </Card>
+          )}
+          <Btn onClick={() => setStep(2)} full disabled={!quote || parseFloat(usd) < 5}>
+            <i className="fas fa-arrow-right"></i> Choose Recipient
+          </Btn>
+        </div>
+      )}
+
+      {step === 2 && (
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-users" style={{ color: G.green, marginRight: 8 }}></i>Who are you sending to?</div>
+          {recipients.length === 0 ? (
+            <Card style={{ textAlign: "center", padding: 32 }}>
+              <i className="fas fa-user-plus" style={{ fontSize: 32, color: G.border, marginBottom: 12, display: "block" }}></i>
+              <div style={{ color: G.muted, marginBottom: 16 }}>No recipients yet</div>
+              <div style={{ fontSize: 13, color: G.light }}>Add a recipient in the Recipients tab first</div>
+            </Card>
+          ) : recipients.map(r => (
+            <Card key={r.id} style={{ marginBottom: 10, cursor: "pointer", border: `2px solid ${selectedId === r.id ? G.green : G.border}`, background: selectedId === r.id ? G.greenLight : G.white }}
+              onClick={() => setSelectedId(r.id)}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Avatar name={r.full_name} bg={selectedId === r.id ? G.green : G.border} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>{r.full_name}</div>
+                  <div style={{ fontSize: 13, color: G.muted }}><i className="fas fa-mobile-alt" style={{ marginRight: 4 }}></i>{r.phone}</div>
+                  <div style={{ fontSize: 11, color: G.green, fontWeight: 600, textTransform: "uppercase", marginTop: 2 }}><i className="fas fa-wallet" style={{ marginRight: 4 }}></i>{r.delivery_method || "M-Pesa"}</div>
+                </div>
+                {selectedId === r.id && <i className="fas fa-check-circle" style={{ color: G.green, fontSize: 22 }}></i>}
+              </div>
+            </Card>
+          ))}
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <Btn variant="ghost" onClick={() => setStep(1)}><i className="fas fa-arrow-left"></i> Back</Btn>
+            <Btn onClick={() => setStep(3)} full disabled={!selectedId}><i className="fas fa-arrow-right"></i> Review Transfer</Btn>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (() => {
+        const recipient = recipients.find(r => r.id === selectedId);
+        return (
+          <div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-check-circle" style={{ color: G.green, marginRight: 8 }}></i>Confirm Transfer</div>
+            <Card style={{ background: `linear-gradient(135deg, ${G.greenDark}, ${G.greenMid})`, color: "#fff", marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
+                <div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>YOU SEND</div><div style={{ fontSize: 32, fontWeight: 900 }}>${usd}</div></div>
+                <div style={{ textAlign: "right" }}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>THEY RECEIVE</div><div style={{ fontSize: 22, fontWeight: 800, color: "#4cde8f" }}>KES {quote ? parseFloat(quote.amount_kes).toLocaleString() : "..."}</div></div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 16 }}>
+                {[["Rate", `1 USD = ${quote ? parseFloat(quote.client_rate).toFixed(2) : "..."} KES`], ["Fee", "Free ✓"], ["Delivery", "~2 minutes"], ["To", recipient?.full_name], ["Via", "M-Pesa"]].map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                    <span style={{ color: "rgba(255,255,255,0.7)" }}>{k}</span>
+                    <span style={{ fontWeight: 600 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
             <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setStep(2)} style={{ ...css.btnSecondary, flex: 1 }}>← Back</button>
-              <button onClick={handleCreate} disabled={loading} style={{ ...css.btnPrimary, flex: 2, opacity: loading ? 0.7 : 1 }}>
-                {loading ? "Creating..." : `Confirm & Send $${usd}`}
-              </button>
+              <Btn variant="ghost" onClick={() => setStep(2)}><i className="fas fa-arrow-left"></i> Back</Btn>
+              <Btn onClick={send} disabled={loading} full>
+                {loading ? <><i className="fas fa-spinner fa-spin"></i> Sending...</> : <><i className="fas fa-paper-plane"></i> Send Money</>}
+              </Btn>
             </div>
-          </>
-        )}
-      </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
 
-// ─── RECIPIENTS ───────────────────────────────────────────────────────────────
+// ── RECIPIENTS ─────────────────────────────────────────────────────────────
 function Recipients() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({ full_name: "", phone: "", delivery_method: "mpesa" });
-  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const colors = ["#00e676", "#29b6f6", "#fb923c", "#a78bfa", "#34d399"];
-  const set = k => v => setForm(f => ({ ...f, [k]: v }));
+  const [error, setError] = useState("");
+  const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const load = useCallback(() => {
-    api.recipients().then(r => setList(r.recipients || [])).finally(() => setLoading(false));
+    api.recipients().then(d => setList(d.recipients || [])).catch(() => {}).finally(() => setLoading(false));
   }, []);
+  useEffect(load, [load]);
 
-  useEffect(() => { load(); }, [load]);
-
-  const addRecipient = async () => {
-    setError(""); setSaving(true);
-    try {
-      await api.addRecipient(form);
-      setForm({ full_name: "", phone: "", delivery_method: "mpesa" });
-      setShowAdd(false);
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
+  const add = async () => {
+    setSaving(true); setError("");
+    try { await api.addRecipient(form); setShowAdd(false); setForm({ full_name: "", phone: "", delivery_method: "mpesa" }); load(); }
+    catch (e) { setError(e.message); }
+    finally { setSaving(false); }
   };
 
-  const deleteRecipient = async (id) => {
-    if (!window.confirm("Delete this recipient?")) return;
-    await api.deleteRecipient(id);
-    load();
+  const del = async (id) => {
+    if (!window.confirm("Remove this recipient?")) return;
+    await api.deleteRecipient(id).catch(() => {}); load();
   };
+
+  const bgColors = [G.green, "#2563eb", "#7c3aed", "#c27c3a", "#dc2626"];
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Recipients</div>
-          <div style={{ fontSize: 12, color: G.muted, fontFamily: G.mono }}>{list.length} saved recipients in Kenya</div>
-        </div>
-        <button onClick={() => setShowAdd(!showAdd)} style={{ ...css.btnPrimary, width: "auto", padding: "10px 18px", fontSize: 13 }}>+ Add Recipient</button>
+    <div style={{ fontFamily: G.font }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div style={{ fontSize: 18, fontWeight: 800 }}><i className="fas fa-users" style={{ color: G.green, marginRight: 8 }}></i>Recipients</div>
+        <Btn onClick={() => setShowAdd(!showAdd)} small>
+          <i className={`fas fa-${showAdd ? "times" : "plus"}`}></i> {showAdd ? "Cancel" : "Add New"}
+        </Btn>
       </div>
 
       {showAdd && (
-        <div style={{ ...css.card, marginBottom: 20, borderColor: G.greenD }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 18 }}>New Recipient</div>
-          <ErrorBox msg={error} />
-          <Input label="Full Name" placeholder="Grace Wanjiku" value={form.full_name} onChange={set("full_name")} />
-          <Input label="M-Pesa / Phone Number" placeholder="+254712345678" value={form.phone} onChange={set("phone")} />
-          <div style={css.inputGroup}>
-            <label style={css.label}>Delivery Method</label>
-            <select value={form.delivery_method} onChange={e => set("delivery_method")(e.target.value)}
-              style={{ ...css.input, appearance: "none", cursor: "pointer" }}>
-              <option value="mpesa">📱 M-Pesa Wallet</option>
-              <option value="bank">🏦 Bank Transfer</option>
-            </select>
+        <Card style={{ marginBottom: 16, border: `2px solid ${G.green}33` }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: G.green }}><i className="fas fa-user-plus"></i> New Recipient</div>
+          {error && <div style={{ background: G.redLight, color: G.red, padding: "8px 12px", borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{error}</div>}
+          <Input label="Full Name" icon="fa-user" placeholder="Grace Wanjiku" value={form.full_name} onChange={set("full_name")} />
+          <Input label="M-Pesa Phone" icon="fa-mobile-alt" placeholder="+254712345678" value={form.phone} onChange={set("phone")} />
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: G.muted, marginBottom: 6, textTransform: "uppercase" }}>Delivery Method</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {["mpesa", "bank"].map(m => (
+                <button key={m} onClick={() => setForm(f => ({ ...f, delivery_method: m }))}
+                  style={{ flex: 1, padding: "10px", borderRadius: 10, border: `2px solid ${form.delivery_method === m ? G.green : G.border}`, background: form.delivery_method === m ? G.greenLight : "transparent", color: form.delivery_method === m ? G.green : G.muted, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: G.font }}>
+                  <i className={`fas fa-${m === "mpesa" ? "mobile-alt" : "university"}`} style={{ marginRight: 6 }}></i>
+                  {m === "mpesa" ? "M-Pesa" : "Bank"}
+                </button>
+              ))}
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setShowAdd(false)} style={{ ...css.btnSecondary, flex: 1 }}>Cancel</button>
-            <button onClick={addRecipient} disabled={saving} style={{ ...css.btnPrimary, flex: 2, opacity: saving ? 0.7 : 1 }}>
-              {saving ? "Saving..." : "Save Recipient"}
-            </button>
-          </div>
-        </div>
+          <Btn onClick={add} disabled={saving} full>
+            {saving ? <><i className="fas fa-spinner fa-spin"></i> Saving...</> : <><i className="fas fa-save"></i> Save Recipient</>}
+          </Btn>
+        </Card>
       )}
 
-      <div style={css.card}>
-        {loading ? <Spinner /> : list.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 40, color: G.muted, fontSize: 13 }}>No recipients yet — add one above.</div>
-        ) : list.map((r, i) => (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < list.length - 1 ? `1px solid ${G.border}` : "none" }}>
-            <Avatar initials={r.full_name.split(" ").map(w => w[0]).join("").slice(0, 2)} color={colors[i % colors.length]} size={42} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>{r.full_name}</div>
-              <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginTop: 2 }}>{r.phone}</div>
-            </div>
-            <div style={{ fontSize: 10, fontFamily: G.mono, padding: "3px 8px", borderRadius: 4, background: r.delivery_method === "mpesa" ? "rgba(0,230,118,0.1)" : "rgba(41,182,246,0.1)", color: r.delivery_method === "mpesa" ? G.green : G.blue }}>
-              {r.delivery_method === "mpesa" ? "M-Pesa" : "Bank"}
-            </div>
-            <button onClick={() => deleteRecipient(r.id)}
-              style={{ background: "transparent", border: `1px solid ${G.border}`, color: G.muted, borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", fontFamily: G.font }}>
-              Delete
-            </button>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40 }}><i className="fas fa-spinner fa-spin" style={{ fontSize: 24, color: G.muted }}></i></div>
+      ) : list.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: 40 }}>
+          <i className="fas fa-users" style={{ fontSize: 36, color: G.border, marginBottom: 12, display: "block" }}></i>
+          <div style={{ color: G.muted }}>No recipients yet</div>
+          <div style={{ fontSize: 13, color: G.light, marginTop: 4 }}>Add someone to get started</div>
+        </Card>
+      ) : list.map((r, i) => (
+        <Card key={r.id} style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 12 }}>
+          <Avatar name={r.full_name} bg={bgColors[i % bgColors.length]} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>{r.full_name}</div>
+            <div style={{ fontSize: 13, color: G.muted }}><i className="fas fa-mobile-alt" style={{ marginRight: 4 }}></i>{r.phone}</div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: G.green, background: G.greenLight, padding: "2px 8px", borderRadius: 100, marginTop: 4, display: "inline-block" }}>
+              <i className="fas fa-wallet" style={{ marginRight: 4 }}></i>{r.delivery_method || "M-Pesa"}
+            </span>
           </div>
-        ))}
-      </div>
+          <button onClick={() => del(r.id)} style={{ background: G.redLight, border: "none", color: G.red, width: 36, height: 36, borderRadius: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <i className="fas fa-trash-alt" style={{ fontSize: 13 }}></i>
+          </button>
+        </Card>
+      ))}
     </div>
   );
 }
 
-// ─── HISTORY ──────────────────────────────────────────────────────────────────
+// ── HISTORY ────────────────────────────────────────────────────────────────
 function History() {
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
-  const colors = ["#00e676", "#29b6f6", "#fb923c", "#a78bfa", "#34d399"];
 
-  useEffect(() => { api.transfers().then(t => setTransfers(t.transfers || [])).finally(() => setLoading(false)); }, []);
+  useEffect(() => {
+    api.transfers().then(d => setTransfers(d.transfers || [])).catch(() => {}).finally(() => setLoading(false));
+  }, []);
 
   const shown = filter === "all" ? transfers : transfers.filter(t => t.status === filter);
-  const total = transfers.filter(t => t.status === "delivered").reduce((a, t) => a + parseFloat(t.amount_usd), 0);
+  const totalDelivered = transfers.filter(t => t.status === "delivered").reduce((a, t) => a + parseFloat(t.amount_usd || 0), 0);
 
   return (
-    <div style={{ maxWidth: 680, margin: "0 auto" }}>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#fff", marginBottom: 4 }}>Transaction History</div>
-        <div style={{ fontSize: 12, color: G.muted, fontFamily: G.mono }}>${total.toFixed(0)} total delivered · {transfers.length} transfers</div>
+    <div style={{ fontFamily: G.font }}>
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}><i className="fas fa-history" style={{ color: G.green, marginRight: 8 }}></i>Transfer History</div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+        <Card style={{ background: G.greenLight, border: `1px solid ${G.green}22` }}>
+          <div style={{ fontSize: 11, color: G.green, fontWeight: 600, marginBottom: 4 }}>TOTAL SENT</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: G.green }}>${totalDelivered.toFixed(0)}</div>
+        </Card>
+        <Card>
+          <div style={{ fontSize: 11, color: G.muted, fontWeight: 600, marginBottom: 4 }}>TRANSFERS</div>
+          <div style={{ fontSize: 22, fontWeight: 900 }}>{transfers.length}</div>
+        </Card>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 24 }}>
-        {[
-          { label: "Total Sent", val: `$${total.toFixed(0)}`, color: G.green },
-          { label: "Transfers", val: transfers.length, color: G.blue },
-          { label: "Delivered", val: transfers.filter(t => t.status === "delivered").length, color: G.orange },
-        ].map(s => (
-          <div key={s.label} style={{ ...css.card, padding: 18 }}>
-            <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 6, letterSpacing: "0.08em" }}>{s.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: s.color, fontFamily: G.mono }}>{s.val}</div>
-          </div>
-        ))}
-      </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
-        {["all", "delivered", "pending", "processing", "failed"].map(f => (
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+        {["all", "delivered", "pending", "failed"].map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            style={{ padding: "7px 14px", border: `1px solid ${filter === f ? G.green : G.border}`, background: filter === f ? G.greenG : "transparent", color: filter === f ? G.green : G.muted, borderRadius: 6, cursor: "pointer", fontFamily: G.mono, fontSize: 11, fontWeight: filter === f ? 600 : 400, textTransform: "capitalize" }}>{f}</button>
+            style={{ padding: "6px 14px", borderRadius: 100, border: `1.5px solid ${filter === f ? G.green : G.border}`, background: filter === f ? G.greenLight : "transparent", color: filter === f ? G.green : G.muted, fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: G.font }}>
+            {f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
         ))}
       </div>
-      <div style={css.card}>
-        {loading ? <Spinner /> : shown.length === 0 ? (
-          <div style={{ textAlign: "center", padding: 40, color: G.muted, fontSize: 13 }}>No transactions found.</div>
-        ) : shown.map((tx, i) => (
-          <div key={tx.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < shown.length - 1 ? `1px solid ${G.border}` : "none" }}>
-            <Avatar initials={(tx.recipient_name || "??").split(" ").map(w => w[0]).join("").slice(0, 2)} color={colors[i % colors.length]} size={40} />
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 40 }}><i className="fas fa-spinner fa-spin" style={{ fontSize: 24, color: G.muted }}></i></div>
+      ) : shown.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: 40 }}>
+          <i className="fas fa-inbox" style={{ fontSize: 36, color: G.border, marginBottom: 12, display: "block" }}></i>
+          <div style={{ color: G.muted }}>No transfers found</div>
+        </Card>
+      ) : shown.map(tx => (
+        <Card key={tx.id} style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, background: tx.status === "delivered" ? G.greenLight : tx.status === "failed" ? G.redLight : "#fef3c7", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <i className={`fas ${statusConfig[tx.status]?.icon || "fa-clock"}`} style={{ color: statusConfig[tx.status]?.color || G.muted, fontSize: 18 }}></i>
+            </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{tx.recipient_name}</div>
-              <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginTop: 2 }}>
-                {new Date(tx.created_at).toLocaleDateString()} · {tx.delivery_method} · #{tx.id.slice(0, 8)}
-              </div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{tx.recipient_name || "Recipient"}</div>
+              <div style={{ fontSize: 12, color: G.muted }}>{new Date(tx.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+              <div style={{ fontSize: 12, color: G.green, fontWeight: 600, marginTop: 2 }}>KES {parseFloat(tx.amount_kes || 0).toLocaleString()}</div>
             </div>
-            <div style={{ textAlign: "right", marginRight: 10 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: G.mono }}>-${parseFloat(tx.amount_usd).toFixed(0)}</div>
-              <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono }}>KES {parseFloat(tx.amount_kes).toLocaleString()}</div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>-${parseFloat(tx.amount_usd || 0).toFixed(0)}</div>
+              <StatusBadge status={tx.status} />
             </div>
-            <StatusBadge status={tx.status} />
           </div>
-        ))}
-      </div>
+        </Card>
+      ))}
     </div>
   );
 }
 
-// ─── MAIN APP ────────────────────────────────────────────────────────────────
+// ── ACCOUNT ────────────────────────────────────────────────────────────────
+function Account({ user, logout, onNavigate }) {
+  const [section, setSection] = useState(null);
+  const [fields, setFields] = useState({ full_name: user?.full_name || "", address: user?.address || "", date_of_birth: user?.date_of_birth?.substring?.(0, 10) || "" });
+  const [phone, setPhone] = useState(user?.phone || "");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [openFaq, setOpenFaq] = useState(null);
+
+  const saveProfile = async () => {
+    setSaving(true);
+    try {
+      await api.updateMe(fields);
+      setMsg("Profile saved!"); setTimeout(() => { setMsg(""); window.location.reload(); }, 1500);
+    } catch (e) { setMsg("Failed to save"); }
+    finally { setSaving(false); }
+  };
+
+  const sendOtp = async () => {
+    setSaving(true);
+    try { await api.sendOtp(phone); setOtpSent(true); setMsg("Code sent to " + phone); }
+    catch (e) { setMsg("Failed to send code"); }
+    finally { setSaving(false); }
+  };
+
+  const verifyOtp = async () => {
+    setSaving(true);
+    try {
+      await api.verifyOtp(otp);
+      setMsg("Phone verified!"); setTimeout(() => window.location.reload(), 1500);
+    } catch (e) { setMsg("Invalid code"); }
+    finally { setSaving(false); }
+  };
+
+  const faqs = [
+    { q: "How long does a transfer take?", a: "Most M-Pesa transfers arrive in under 2 minutes." },
+    { q: "What are your fees?", a: "Zero fees. We earn a small spread on the exchange rate." },
+    { q: "What is the exchange rate?", a: "Live mid-market rate with 0.8% spread — best in market." },
+    { q: "What is the maximum transfer?", a: "Maximum single transfer is $10,000." },
+    { q: "Is my money safe?", a: "Yes. 256-bit encryption and Stripe payments protect every transfer." },
+  ];
+
+  const menuItems = [
+    { icon: "fa-user", label: "Personal Details", sub: "Name, address, date of birth", section: "personal" },
+    { icon: "fa-chart-bar", label: "Transfer Limits", sub: "$10,000 per transfer", section: "limits" },
+    { icon: "fa-credit-card", label: "Manage Cards", sub: "Added when you transfer", section: null },
+    { icon: "fa-id-card", label: "KYC Verification", sub: user?.kyc_status === "approved" ? "✅ Verified" : "⚠️ Action required", section: "kyc" },
+  ];
+
+  const supportItems = [
+    { icon: "fa-comment-dots", label: "Live Chat", sub: "Available 24/7", action: () => window.$crisp && window.$crisp.push(["do", "chat:open"]) },
+    { icon: "fa-question-circle", label: "FAQs", sub: "Common questions answered", action: () => setSection("faqs") },
+    { icon: "fa-envelope", label: "Email Support", sub: "support@temboswift.com", action: () => window.open("mailto:support@temboswift.com") },
+  ];
+
+  const BackBtn = ({ onClick }) => (
+    <button onClick={onClick} style={{ background: "none", border: "none", color: G.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, marginBottom: 20, padding: 0 }}>
+      <i className="fas fa-arrow-left"></i> Back
+    </button>
+  );
+
+  if (section === "personal") return (
+    <div style={{ fontFamily: G.font }}>
+      <BackBtn onClick={() => setSection(null)} />
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-user" style={{ color: G.green, marginRight: 8 }}></i>Personal Details</div>
+      {msg && <div style={{ background: msg.includes("!") ? G.greenLight : G.redLight, color: msg.includes("!") ? G.green : G.red, padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: G.green, marginBottom: 16 }}>BASIC INFO</div>
+        <Input label="Full Name" icon="fa-user" value={fields.full_name} onChange={e => setFields(f => ({ ...f, full_name: e.target.value }))} placeholder="Your legal name" />
+        <Input label="Address" icon="fa-map-marker-alt" value={fields.address} onChange={e => setFields(f => ({ ...f, address: e.target.value }))} placeholder="Your home address" />
+        <Input label="Date of Birth" icon="fa-calendar" type="date" value={fields.date_of_birth} onChange={e => setFields(f => ({ ...f, date_of_birth: e.target.value }))} />
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: G.muted, marginBottom: 6, textTransform: "uppercase" }}>Email Address</div>
+          <div style={{ background: G.bg, border: `1px solid ${G.border}`, borderRadius: 10, padding: "12px 14px", color: G.muted, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+            <i className="fas fa-envelope" style={{ color: G.muted }}></i> {user?.email}
+          </div>
+        </div>
+        <Btn onClick={saveProfile} disabled={saving} full>
+          {saving ? <><i className="fas fa-spinner fa-spin"></i> Saving...</> : <><i className="fas fa-save"></i> Save Changes</>}
+        </Btn>
+      </Card>
+      <Card>
+        <div style={{ fontSize: 13, fontWeight: 700, color: G.green, marginBottom: 16 }}>
+          MOBILE NUMBER {user?.phone_verified ? <span style={{ color: G.green }}>✅ Verified</span> : <span style={{ color: "#d97706" }}>⚠️ Not verified</span>}
+        </div>
+        <Input icon="fa-mobile-alt" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+12143045008" />
+        {!otpSent ? (
+          <Btn variant="outline" onClick={sendOtp} disabled={saving} full>
+            {saving ? <><i className="fas fa-spinner fa-spin"></i> Sending...</> : <><i className="fas fa-sms"></i> Send Verification Code</>}
+          </Btn>
+        ) : (
+          <>
+            <Input icon="fa-key" value={otp} onChange={e => setOtp(e.target.value)} placeholder="Enter 6-digit code" />
+            <Btn onClick={verifyOtp} disabled={saving} full>
+              {saving ? <><i className="fas fa-spinner fa-spin"></i> Verifying...</> : <><i className="fas fa-check"></i> Verify Code</>}
+            </Btn>
+          </>
+        )}
+      </Card>
+    </div>
+  );
+
+  if (section === "limits") return (
+    <div style={{ fontFamily: G.font }}>
+      <BackBtn onClick={() => setSection(null)} />
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-chart-bar" style={{ color: G.green, marginRight: 8 }}></i>Transfer Limits</div>
+      <Card>
+        {[["Single transfer", "$10,000"], ["Daily limit", "$10,000"], ["Monthly limit", "$50,000"], ["Minimum transfer", "$5"]].map(([k, v]) => (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${G.border}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <i className="fas fa-arrow-right" style={{ color: G.green, fontSize: 12 }}></i>
+              <span style={{ fontSize: 14, color: G.muted }}>{k}</span>
+            </div>
+            <span style={{ fontSize: 16, fontWeight: 800, color: G.green }}>{v}</span>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+
+  if (section === "kyc") return (
+    <div style={{ fontFamily: G.font }}>
+      <BackBtn onClick={() => setSection(null)} />
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-id-card" style={{ color: G.green, marginRight: 8 }}></i>Identity Verification</div>
+      <Card style={{ textAlign: "center", padding: 32 }}>
+        <i className="fas fa-shield-alt" style={{ fontSize: 48, color: G.green, marginBottom: 16, display: "block" }}></i>
+        <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>
+          {user?.kyc_status === "approved" ? "Identity Verified ✅" : "Verify Your Identity"}
+        </div>
+        <div style={{ fontSize: 14, color: G.muted, marginBottom: 24, lineHeight: 1.6 }}>
+          {user?.kyc_status === "approved" ? "Your identity has been verified. You can send up to $10,000 per transfer." : "Required to send money. Takes about 2 minutes with a government ID."}
+        </div>
+        {user?.kyc_status !== "approved" && (
+          <Btn onClick={async () => { try { const d = await api.kycStart(); if (d.url) window.open(d.url, "_blank"); } catch (e) {} }} full>
+            <i className="fas fa-id-card"></i> Start Verification
+          </Btn>
+        )}
+      </Card>
+    </div>
+  );
+
+  if (section === "legal") return (
+    <div style={{ fontFamily: G.font }}>
+      <BackBtn onClick={() => setSection(null)} />
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-balance-scale" style={{ color: G.green, marginRight: 8 }}></i>Legal Information</div>
+      <Card>
+        {[["Privacy Policy", "fa-lock", "https://temboswift.com/privacy.html"], ["Terms of Service", "fa-file-alt", "https://temboswift.com/terms.html"], ["Licenses & Compliance", "fa-landmark", "https://temboswift.com/privacy.html"]].map(([label, icon, url]) => (
+          <div key={label} onClick={() => window.open(url)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${G.border}`, cursor: "pointer" }}>
+            <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <i className={`fas ${icon}`} style={{ color: G.green }}></i>
+            </div>
+            <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{label}</div>
+            <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+
+  if (section === "faqs") return (
+    <div style={{ fontFamily: G.font }}>
+      <BackBtn onClick={() => setSection(null)} />
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-question-circle" style={{ color: G.green, marginRight: 8 }}></i>FAQs</div>
+      <Card>
+        {faqs.map((faq, i) => (
+          <div key={i} style={{ borderBottom: i < faqs.length - 1 ? `1px solid ${G.border}` : "none" }}>
+            <div onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", cursor: "pointer" }}>
+              <div style={{ fontSize: 14, fontWeight: 600, flex: 1, paddingRight: 12 }}>{faq.q}</div>
+              <i className={`fas fa-${openFaq === i ? "minus" : "plus"}`} style={{ color: G.green, fontSize: 14 }}></i>
+            </div>
+            {openFaq === i && <div style={{ fontSize: 13, color: G.muted, paddingBottom: 14, lineHeight: 1.7 }}>{faq.a}</div>}
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+
+  return (
+    <div style={{ fontFamily: G.font }}>
+      {/* Profile header */}
+      <div style={{ background: `linear-gradient(135deg, ${G.greenDark}, ${G.greenMid})`, borderRadius: 20, padding: 24, marginBottom: 20, color: "#fff", textAlign: "center" }}>
+        <div style={{ width: 72, height: 72, background: "rgba(255,255,255,0.15)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", border: "2px solid rgba(255,255,255,0.3)" }}>
+          <span style={{ fontSize: 24, fontWeight: 800 }}>{(user?.full_name || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}</span>
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 800 }}>{user?.full_name}</div>
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 4 }}>{user?.email}</div>
+        <div style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 6, background: user?.kyc_status === "approved" ? "rgba(76,222,143,0.2)" : "rgba(245,158,11,0.2)", borderRadius: 100, padding: "4px 14px", fontSize: 12, fontWeight: 700 }}>
+          <i className={`fas fa-${user?.kyc_status === "approved" ? "check-circle" : "exclamation-triangle"}`}></i>
+          {user?.kyc_status === "approved" ? "Identity Verified" : "KYC Pending"}
+        </div>
+      </div>
+
+      {/* Account section */}
+      <div style={{ fontSize: 11, fontWeight: 700, color: G.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Account</div>
+      <Card style={{ marginBottom: 16 }}>
+        {menuItems.map((item, i) => (
+          <div key={item.label} onClick={() => item.section && setSection(item.section)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: i < menuItems.length - 1 ? `1px solid ${G.border}` : "none", cursor: item.section ? "pointer" : "default" }}>
+            <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <i className={`fas ${item.icon}`} style={{ color: G.green }}></i>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{item.label}</div>
+              <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>{item.sub}</div>
+            </div>
+            {item.section && <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>}
+          </div>
+        ))}
+      </Card>
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: G.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Support</div>
+      <Card style={{ marginBottom: 16 }}>
+        {supportItems.map((item, i) => (
+          <div key={item.label} onClick={item.action} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: i < supportItems.length - 1 ? `1px solid ${G.border}` : "none", cursor: "pointer" }}>
+            <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <i className={`fas ${item.icon}`} style={{ color: G.green }}></i>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{item.label}</div>
+              <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>{item.sub}</div>
+            </div>
+            <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>
+          </div>
+        ))}
+      </Card>
+
+      <div style={{ fontSize: 11, fontWeight: 700, color: G.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Legal</div>
+      <Card style={{ marginBottom: 20, cursor: "pointer" }} onClick={() => setSection("legal")}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <i className="fas fa-balance-scale" style={{ color: G.green }}></i>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Legal Information</div>
+            <div style={{ fontSize: 12, color: G.muted }}>Privacy Policy, Terms & Compliance</div>
+          </div>
+          <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>
+        </div>
+      </Card>
+
+      <div style={{ textAlign: "center", fontSize: 12, color: G.muted, marginBottom: 16 }}>TemboSwift v1.0.0 · US → Kenya</div>
+
+      <button onClick={logout} style={{ width: "100%", background: G.redLight, border: `1px solid ${G.red}33`, borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, color: G.red, cursor: "pointer", fontFamily: G.font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 40 }}>
+        <i className="fas fa-sign-out-alt"></i> Sign Out
+      </button>
+    </div>
+  );
+}
+
+// ── BOTTOM NAV ─────────────────────────────────────────────────────────────
+const NAV = [
+  { id: "dashboard", icon: "fa-home", label: "Home" },
+  { id: "send", icon: "fa-paper-plane", label: "Send" },
+  { id: "recipients", icon: "fa-users", label: "Recipients" },
+  { id: "history", icon: "fa-history", label: "History" },
+  { id: "account", icon: "fa-user-circle", label: "Account" },
+];
+
+// ── MAIN APP ───────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("ks_token");
+    const token = localStorage.getItem("ts_token");
     if (token) {
-      api.me().then(d => setUser(d.user)).catch(() => localStorage.removeItem("ks_token")).finally(() => setChecking(false));
-    } else {
-      setChecking(false);
-    }
+      api.me().then(d => setUser(d.user)).catch(() => localStorage.removeItem("ts_token")).finally(() => setChecking(false));
+    } else { setChecking(false); }
   }, []);
 
-  const logout = () => { localStorage.removeItem("ks_token"); setUser(null); setPage("dashboard"); };
-
-  const NAV = [
-    { id: "dashboard", icon: "🏠", label: "Dashboard" },
-    { id: "send",      icon: "💸", label: "Send Money" },
-    { id: "recipients",icon: "👥", label: "Recipients" },
-    { id: "history",   icon: "📋", label: "History" },
-    { id: "support",   icon: "⚙️",  label: "Account" },
-  ];
-
-  if (window.location.pathname === '/admin') return <AdminDashboard />;
-  if (checking) return <div style={{ minHeight: "100vh", background: G.bg, display: "flex", alignItems: "center", justifyContent: "center", color: G.muted, fontFamily: G.mono }}>Loading...</div>;
-  if (!user) return <AuthPage onLogin={setUser} />;
-
-  return (
-    <div style={css.app}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
-        ::-webkit-scrollbar { width: 4px; background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #1c2a35; border-radius: 2px; }
-        select option { background: #0c1017; color: #e2edf5; }
-        @media (max-width: 700px) { .sidebar-desktop { display: none !important; } .main-pad { padding: 20px 16px !important; } }
-      `}</style>
-
-      <div style={css.topbar}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.5px" }}>Tembo<span style={{ color: G.green }}>Swift</span></div>
-          <div style={{ background: "rgba(0,230,118,0.1)", border: "1px solid rgba(0,230,118,0.2)", borderRadius: 4, padding: "2px 8px", fontSize: 9, color: G.green, fontFamily: G.mono, letterSpacing: "0.1em" }}>LIVE</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          {user.kyc_status !== "approved" && (
-            <div style={{ fontSize: 10, color: G.yellow, fontFamily: G.mono, background: "rgba(251,191,36,0.1)", padding: "3px 8px", borderRadius: 4 }}>KYC PENDING</div>
-          )}
-          <Avatar initials={user.full_name?.split(" ").map(w => w[0]).join("").slice(0, 2) || "U"} color={G.green} size={30} />
-          <span style={{ fontSize: 13, fontWeight: 600 }}>{user.full_name?.split(" ")[0]}</span>
-        </div>
-      </div>
-
-      <div style={css.shell}>
-        <div style={css.sidebar} className="sidebar-desktop">
-          <div style={{ padding: "24px 24px 20px", borderBottom: `1px solid ${G.border}`, marginBottom: 8 }}>
-            <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em" }}>NAVIGATION</div>
-          </div>
-          {NAV.map(n => (
-            <div key={n.id} onClick={() => setPage(n.id)} style={css.navItem(page === n.id)}>
-              <span style={{ fontSize: 15 }}>{n.icon}</span>
-              <span>{n.label}</span>
-            </div>
-          ))}
-          <div style={{ flex: 1 }} />
-          <div style={{ padding: "0 24px" }}>
-            <div style={{ borderTop: `1px solid ${G.border}`, paddingTop: 16 }}>
-              <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 8 }}>ACCOUNT</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", cursor: "pointer", color: G.muted, fontSize: 12 }}>
-                <span>🪪</span><span>KYC: <span style={{ color: user.kyc_status === "approved" ? G.green : G.yellow }}>{user.kyc_status}</span></span>
-              </div>
-              <div onClick={logout} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", cursor: "pointer", color: G.muted, fontSize: 12 }}>
-                <span>🚪</span><span>Sign Out</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={css.main} className="main-pad">
-          {page === "dashboard"   && <Dashboard user={user} onNavigate={setPage} />}
-          {page === "send"        && <SendMoney user={user} />}
-          {page === "recipients"  && <Recipients />}
-          {page === "history" && <History />}
-          {page === "support" && <Support user={user} onLogout={logout} onNavigate={setPage} />}
-        </div>
-      </div>
-
-      <style>{`@media (min-width: 701px) { .mobile-nav { display: none !important; } }`}</style>
-      <div className="mobile-nav" style={{ display: "flex", background: G.surface, borderTop: `1px solid ${G.border}`, padding: "8px 0 4px" }}>
-        {NAV.map(n => (
-          <div key={n.id} onClick={() => setPage(n.id)}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "6px 0", cursor: "pointer", color: page === n.id ? G.green : G.muted }}>
-            <span style={{ fontSize: 18 }}>{n.icon}</span>
-            <span style={{ fontSize: 9, fontFamily: G.mono, fontWeight: page === n.id ? 600 : 400 }}>{n.label}</span>
-          </div>
-        ))}
+  if (checking) return (
+    <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${G.greenDark}, ${G.greenMid})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: G.font }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+      <div style={{ textAlign: "center", color: "#fff" }}>
+        <i className="fas fa-paper-plane" style={{ fontSize: 40, color: "#4cde8f", marginBottom: 16, display: "block" }}></i>
+        <i className="fas fa-spinner fa-spin" style={{ fontSize: 20 }}></i>
       </div>
     </div>
   );
-}function Support({ user, onLogout, onNavigate }) {
-  const parseAddress = (addr) => {
-    if (!addr) return { street: "", city: "", state: "", zip: "", country: "United States" };
-    const parts = addr.split(",").map(s => s.trim());
-    return { street: parts[0] || "", city: parts[1] || "", state: parts[2] || "", zip: parts[3] || "", country: parts[4] || "United States" };
+
+  if (!user) return <AuthScreen onLogin={u => { setUser(u); setPage("dashboard"); }} />;
+
+  const logout = () => { localStorage.removeItem("ts_token"); setUser(null); };
+
+  const pages = {
+    dashboard: <Dashboard user={user} setPage={setPage} />,
+    send: <SendMoney user={user} />,
+    recipients: <Recipients />,
+    history: <History />,
+    account: <Account user={user} logout={logout} onNavigate={setPage} />,
   };
-  const [fields, setFields] = useState({ full_name: (user && user.full_name) || "", date_of_birth: (user && user.date_of_birth ? user.date_of_birth.substring(0,10) : ""), ...parseAddress(user && user.address) });
-  const buildAddress = (f) => [f.street, f.city, f.state, f.zip, f.country].filter(Boolean).join(", ");
-  const [phone, setPhone] = useState((user && user.phone) || "");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMsg, setProfileMsg] = useState("");
-  const tok = localStorage.getItem("ks_token");
-  const hdrs = { "Content-Type": "application/json", Authorization: "Bearer " + tok };
-  const saveProfile = async () => { setProfileSaving(true); try { await fetch("https://temboswift-backend.onrender.com/api/auth/me", { method: "PUT", headers: hdrs, body: JSON.stringify({ ...fields, address: buildAddress(fields) }) }); setProfileMsg("Profile saved!"); setProfileSaving(false); setTimeout(() => { setProfileMsg(""); window.location.reload(); }, 1500); } catch(e) { setProfileSaving(false); } };
-  const sendOtp = async () => { setProfileSaving(true); try { await fetch("https://temboswift-backend.onrender.com/api/auth/phone/send-otp", { method: "POST", headers: hdrs, body: JSON.stringify({ phone }) }); setOtpSent(true); setProfileMsg("Code sent!"); setProfileSaving(false); } catch(e) { setProfileSaving(false); } };
-  const verifyOtp = async () => { setProfileSaving(true); try { const res = await fetch("https://temboswift-backend.onrender.com/api/auth/phone/verify-otp", { method: "POST", headers: hdrs, body: JSON.stringify({ otp }) }); const data = await res.json(); if (data.message) { setProfileMsg("Phone verified!"); setTimeout(() => window.location.reload(), 1500); } else { setProfileMsg("Invalid code"); } setProfileSaving(false); } catch(e) { setProfileSaving(false); } };
-  const [openFaq, setOpenFaq] = useState(null);
-  
-  const [activeSection, setActiveSection] = useState(null);
-  const faqs = [
-    { q: "How long does a transfer take?", a: "Most M-Pesa transfers arrive in under 2 minutes. Bank transfers take 1-2 business days." },
-    { q: "What are your fees?", a: "Flat fee: \$2.99 under \$100, \$3.99 for \$100-\$199, \$4.99 for \$200+. No hidden fees." },
-    { q: "What is the exchange rate?", a: "Live mid-market rate with 1.5% spread. You always see the exact rate before confirming." },
-    { q: "How do I send to M-Pesa?", a: "Add recipient with Kenyan phone (+254...), select M-Pesa delivery, and send." },
-    { q: "What is the maximum transfer amount?", a: "Maximum single transfer is \$10,000." },
-    { q: "Is my money safe?", a: "Yes. 256-bit encryption, Stripe payments, sanctions and fraud checks on every transfer." },
-    { q: "What if my transfer fails?", a: "Payment is not charged if transfer fails. You receive an email with the reason." },
-  ];
-  const initials = user?.full_name?.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase() || "U";
-  if (activeSection === "personal") return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>back</button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Personal Details</div>
-      </div>
-      {profileMsg && <div style={{ background: G.greenG, border: "1px solid " + G.green, borderRadius: 8, padding: "10px 14px", fontSize: 13, color: G.green, marginBottom: 16 }}>{profileMsg}</div>}
-      <div style={{ ...css.card, marginBottom: 16 }}>
-        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em", marginBottom: 16 }}>BASIC INFO</div>
-        {[["Full Name", "full_name", "text", "Your legal name"], ["Date of Birth", "date_of_birth", "date", ""]].map(([label, key, type, placeholder]) => (
-          <div key={key} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 6 }}>{label.toUpperCase()}</div>
-            <input type={type} value={fields[key]} onChange={e => setFields(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} style={{ width: "100%", background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-          </div>
-        ))}
-        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 10, marginTop: 4 }}>ADDRESS</div>
-        {[["Street Address", "street", "123 Main St"], ["City", "city", "New York"], ["State", "state", "NY"], ["ZIP Code", "zip", "10001"], ["Country", "country", "United States"]].map(([label, key, placeholder]) => (
-          <div key={key} style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 10, color: G.muted, fontFamily: G.mono, marginBottom: 4 }}>{label.toUpperCase()}</div>
-            <input value={fields[key] || ""} onChange={e => setFields(f => ({ ...f, [key]: e.target.value }))} placeholder={placeholder} style={{ width: "100%", background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-          </div>
-        ))}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, marginBottom: 6 }}>EMAIL ADDRESS</div>
-          <div style={{ background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.muted, fontSize: 14 }}>{user && user.email}</div>
-        </div>
-        <button onClick={saveProfile} disabled={profileSaving} style={{ width: "100%", background: G.green, color: "#000", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{profileSaving ? "Saving..." : "Save Changes"}</button>
-      </div>
-      <div style={css.card}>
-        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em", marginBottom: 16 }}>MOBILE NUMBER {user && user.phone_verified ? "Verified" : "Not verified"}</div>
-        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+12143045008" style={{ width: "100%", background: G.surface, border: "1px solid " + G.border, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
-        {!otpSent ? (
-          <button onClick={sendOtp} disabled={profileSaving} style={{ width: "100%", background: G.surface, border: "1px solid " + G.green, color: G.green, borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>{profileSaving ? "Sending..." : "Send Verification Code"}</button>
-        ) : (
-          <div>
-            <input value={otp} onChange={e => setOtp(e.target.value)} placeholder="Enter 6-digit code" style={{ width: "100%", background: G.surface, border: "1px solid " + G.green, borderRadius: 8, padding: "10px 14px", color: G.text, fontSize: 14, outline: "none", boxSizing: "border-box", marginBottom: 10 }} />
-            <button onClick={verifyOtp} disabled={profileSaving} style={{ width: "100%", background: G.green, color: "#000", border: "none", borderRadius: 8, padding: 12, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>{profileSaving ? "Verifying..." : "Verify Code"}</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-    if (activeSection === "limits") return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>←</button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Transfer Limits</div>
-      </div>
-      <div style={css.card}>
-        {[["Single transfer", "\$10,000"], ["Daily limit", "\$10,000"], ["Monthly limit", "\$50,000"], ["Minimum transfer", "\$5"]].map(([k,v]) => (
-          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: "1px solid " + G.border }}>
-            <span style={{ fontSize: 13, color: G.muted }}>{k}</span>
-            <span style={{ fontSize: 13, color: G.green, fontWeight: 700, fontFamily: G.mono }}>{v}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-  if (activeSection === "faqs") return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>←</button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>FAQs</div>
-      </div>
-      <div style={css.card}>
-        {faqs.map((faq, i) => (
-          <div key={i} style={{ borderBottom: i < faqs.length - 1 ? "1px solid " + G.border : "none" }}>
-            <div onClick={() => setOpenFaq(openFaq === i ? null : i)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 0", cursor: "pointer" }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: G.text, paddingRight: 16, flex: 1 }}>{faq.q}</div>
-              <span style={{ color: G.muted, fontSize: 18 }}>{openFaq === i ? "−" : "+"}</span>
-            </div>
-            {openFaq === i && <div style={{ fontSize: 13, color: G.muted, lineHeight: 1.7, paddingBottom: 16 }}>{faq.a}</div>}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-  if (activeSection === "contact") return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>←</button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Contact Support</div>
-      </div>
-      <div style={css.card}>
-        {[
-          { icon: "💬", label: "Chat live", sub: "Available 24/7", action: () => window.$crisp && window.$crisp.push(["do", "chat:open"]) },
-          { icon: "📧", label: "Email us", sub: "support@temboswift.com", action: () => window.open("mailto:support@temboswift.com") },
-          { icon: "📞", label: "Call us", sub: "Mon-Fri 9AM-6PM EST", action: () => window.open("tel:+12143045008") },
-        ].map((item, i, arr) => (
-          <div key={item.label} onClick={item.action} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0", borderBottom: i < arr.length - 1 ? "1px solid " + G.border : "none", cursor: "pointer" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: G.greenG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{item.icon}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: G.text }}>{item.label}</div>
-              <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>{item.sub}</div>
-            </div>
-            <span style={{ color: G.muted }}>›</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-  if (activeSection === "legal") return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={() => setActiveSection(null)} style={{ background: "transparent", border: "none", color: G.muted, cursor: "pointer", fontSize: 22 }}>←</button>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>Legal Information</div>
-      </div>
-      <div style={css.card}>
-        {[
-          { icon: "🔏", label: "Privacy Policy", url: "https://temboswift.com/privacy.html" },
-          { icon: "📋", label: "Terms of Service", url: "https://temboswift.com/terms.html" },
-          { icon: "⚖️", label: "Licenses", url: "https://temboswift.com/privacy.html" },
-        ].map((item, i, arr) => (
-          <div key={item.label} onClick={() => window.open(item.url)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 0", borderBottom: i < arr.length - 1 ? "1px solid " + G.border : "none", cursor: "pointer" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{item.icon}</div>
-            <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 600, color: G.text }}>{item.label}</div></div>
-            <span style={{ color: G.muted }}>›</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ textAlign: "center", padding: "32px 0 28px" }}>
-        <div style={{ width: 72, height: 72, borderRadius: "50%", background: G.greenG, border: "2px solid " + G.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800, color: G.green, margin: "0 auto 12px" }}>{initials}</div>
-        <div style={{ fontSize: 20, fontWeight: 800, color: "#fff" }}>{user?.full_name || "User"}</div>
-        <div style={{ fontSize: 13, color: G.muted, marginTop: 4 }}>{user?.email}</div>
-      </div>
-      <div style={{ ...css.card, marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em", marginBottom: 4 }}>ACCOUNT</div>
-        {[
-          { icon: "👤", label: "Personal Details", sub: "Name, email, phone", action: () => setActiveSection("personal") },
-          { icon: "📊", label: "Transfer Limits", sub: "$10,000 per transfer", action: () => setActiveSection("limits") },
-          { icon: "💳", label: "Manage Cards", sub: "Added when you transfer", action: null },
-          { icon: "🪪", label: "KYC Verification", sub: user?.kyc_status === "approved" ? "✅ Verified" : "⚠️ Action required", action: () => onNavigate("kyc") },
-        ].map((item, i, arr) => (
-          <div key={item.label} onClick={item.action || undefined} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < arr.length - 1 ? "1px solid " + G.border : "none", cursor: item.action ? "pointer" : "default" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{item.icon}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: G.text }}>{item.label}</div>
-              <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>{item.sub}</div>
-            </div>
-            <span style={{ color: G.muted }}>›</span>
+    <div style={{ fontFamily: G.font, background: G.bg, minHeight: "100vh", maxWidth: 480, margin: "0 auto", position: "relative" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+      {/* Header */}
+      <div style={{ background: G.green, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
+        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 800, color: "#fff" }}>
+          Tembo<span style={{ color: "#4cde8f" }}>Swift</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", background: "rgba(255,255,255,0.1)", padding: "4px 10px", borderRadius: 100, fontWeight: 600 }}>
+            <i className="fas fa-bolt" style={{ color: "#4cde8f", marginRight: 4 }}></i>LIVE
           </div>
+          <button onClick={logout} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <i className="fas fa-sign-out-alt" style={{ fontSize: 12 }}></i>
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{ padding: "20px 16px 100px" }}>
+        {pages[page]}
+      </div>
+
+      {/* Bottom Nav */}
+      <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#fff", borderTop: `1px solid ${G.border}`, display: "flex", zIndex: 50, boxShadow: "0 -4px 20px rgba(0,0,0,0.08)" }}>
+        {NAV.map(n => (
+          <button key={n.id} onClick={() => setPage(n.id)}
+            style={{ flex: 1, padding: "10px 0 8px", border: "none", background: "transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontFamily: G.font }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: page === n.id ? G.greenLight : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}>
+              <i className={`fas ${n.icon}`} style={{ fontSize: 16, color: page === n.id ? G.green : G.muted }}></i>
+            </div>
+            <span style={{ fontSize: 10, fontWeight: page === n.id ? 700 : 500, color: page === n.id ? G.green : G.muted }}>{n.label}</span>
+          </button>
         ))}
       </div>
-      <div style={{ ...css.card, marginBottom: 12 }}>
-        <div style={{ fontSize: 11, color: G.muted, fontFamily: G.mono, letterSpacing: "0.1em", marginBottom: 4 }}>SUPPORT</div>
-        {[
-          { icon: "💬", label: "Contact Support", sub: "Chat, email or call us", action: () => setActiveSection("contact") },
-          { icon: "❓", label: "FAQs", sub: "Common questions answered", action: () => setActiveSection("faqs") },
-        ].map((item, i, arr) => (
-          <div key={item.label} onClick={item.action} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", borderBottom: i < arr.length - 1 ? "1px solid " + G.border : "none", cursor: "pointer" }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: G.greenG, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{item.icon}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: G.text }}>{item.label}</div>
-              <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>{item.sub}</div>
-            </div>
-            <span style={{ color: G.muted }}>›</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ ...css.card, marginBottom: 12 }}>
-        <div onClick={() => setActiveSection("legal")} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 0", cursor: "pointer" }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚖️</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: G.text }}>Legal Information</div>
-            <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>Privacy, Terms & Compliance</div>
-          </div>
-          <span style={{ color: G.muted }}>›</span>
-        </div>
-      </div>
-      <div style={{ ...css.card, marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid " + G.border }}>
-          <span style={{ fontSize: 13, color: G.muted }}>Version</span>
-          <span style={{ fontSize: 13, color: G.text, fontFamily: G.mono }}>1.0.0</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0" }}>
-          <span style={{ fontSize: 13, color: G.muted }}>🐘 TemboSwift</span>
-          <span style={{ fontSize: 13, color: G.muted }}>US → Kenya</span>
-        </div>
-      </div>
-      <button onClick={onLogout} style={{ width: "100%", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 10, padding: "14px", fontSize: 14, fontWeight: 600, color: "#f87171", cursor: "pointer", marginBottom: 40 }}>
-        Sign Out
-      </button>
     </div>
   );
 }
-
-
-
-
-
-
-
-

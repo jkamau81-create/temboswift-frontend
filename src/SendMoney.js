@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import Receipt from "./Receipt";
 
 const API = "https://temboswift-backend.onrender.com/api";
 const G = { green: "#0b5e35", greenDark: "#093d28", greenMid: "#1a7a4a", greenLight: "#f0faf5", acc: "#f5a623", bg: "#f5f0e8", white: "#fff", border: "#e8e3d8", text: "#111", muted: "#666", light: "#999", red: "#dc2626", redLight: "#fef2f2", font: "'DM Sans', sans-serif" };
@@ -80,10 +79,10 @@ export default function SendMoney({ user, onDone }) {
   const [mpesaName, setMpesaName] = useState(null);
   const [nameLoading, setNameLoading] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState("mpesa");
   const [selectedRecipient, setSelectedRecipient] = useState(null);
   const [savedRecipients, setSavedRecipients] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [lastTransfer, setLastTransfer] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
@@ -127,24 +126,30 @@ export default function SendMoney({ user, onDone }) {
     try {
       let recipientId = selectedRecipient?.id;
       if (!recipientId) {
-        const r = await req("/recipients", { method: "POST", body: JSON.stringify({ full_name: mpesaName?.name || "Recipient", phone: fullPhone, delivery_method: "mpesa" }) });
+        const r = await req("/recipients", { method: "POST", body: JSON.stringify({ full_name: mpesaName?.name || "Recipient", phone: fullPhone, delivery_method: deliveryMethod }) });
         recipientId = r.recipient?.id || r.id;
       }
-      const txResult = await req("/transfers", { method: "POST", body: JSON.stringify({ recipient_id: recipientId, amount_usd: parseFloat(usd) }) });
-      setLastTransfer({ ...txResult, amount_usd: usd, amount_kes: quote?.amount_kes, exchange_rate: quote?.client_rate, recipient_name: mpesaName?.name || selectedRecipient?.full_name, recipient_phone: fullPhone });
+      await req("/transfers", { method: "POST", body: JSON.stringify({ recipient_id: recipientId, amount_usd: parseFloat(usd) }) });
       setSuccess(true);
     } catch (e) { setError(e.message || "Transfer failed"); }
     finally { setLoading(false); }
   };
 
   if (success) return (
-    <Receipt
-      transfer={lastTransfer}
-      onClose={() => { setSuccess(false); onDone && onDone(); }}
-      onSendAnother={() => { setSuccess(false); setStep(1); setPhoneLocal(""); setMpesaName(null); setSelectedRecipient(null); }}
-    />
+    <div style={{ textAlign: "center", padding: "48px 20px", fontFamily: G.font }}>
+      <div style={{ width: 80, height: 80, background: G.greenLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+        <i className="fas fa-check-circle" style={{ fontSize: 40, color: G.green }}></i>
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Money Sent! 🎉</div>
+      <div style={{ fontSize: 32, fontWeight: 900, color: G.green, marginBottom: 4 }}>KES {quote ? parseFloat(quote.amount_kes).toLocaleString() : ""}</div>
+      <div style={{ fontSize: 15, color: G.muted, marginBottom: 8 }}>to {mpesaName?.name || selectedRecipient?.full_name}</div>
+      <div style={{ fontSize: 13, color: G.muted, marginBottom: 32 }}>{country.flag} {fullPhone} · arriving in ~2 minutes</div>
+      <button onClick={() => { setSuccess(false); setStep(1); setPhoneLocal(""); setMpesaName(null); setSelectedRecipient(null); }}
+        style={{ background: G.green, color: "#fff", border: "none", borderRadius: 100, padding: "14px 32px", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: G.font }}>
+        <i className="fas fa-plus"></i> Send Another
+      </button>
+    </div>
   );
-
 
   return (
     <div style={{ fontFamily: G.font, maxWidth: 480 }}>
@@ -291,6 +296,18 @@ export default function SendMoney({ user, onDone }) {
             </div>
           )}
 
+          {/* Delivery method */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: G.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Delivery Method</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              {[{id:"mpesa",icon:"fa-mobile-alt",label:"M-Pesa"},{id:"bank",icon:"fa-university",label:"Bank"}].map(m => (
+                <button key={m.id} onClick={() => setDeliveryMethod(m.id)}
+                  style={{ flex: 1, padding: "12px", borderRadius: 12, border: `2px solid ${deliveryMethod === m.id ? G.green : G.border}`, background: deliveryMethod === m.id ? G.greenLight : "#fff", color: deliveryMethod === m.id ? G.green : G.muted, fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: G.font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <i className={`fas ${m.icon}`}></i> {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {nameError && <div style={{ fontSize: 13, color: G.red, marginBottom: 12 }}><i className="fas fa-exclamation-circle"></i> {nameError}</div>}
 
           <div style={{ display: "flex", gap: 10 }}>
@@ -322,7 +339,8 @@ export default function SendMoney({ user, onDone }) {
               </div>
             </div>
             <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 16px" }}>
-              {[["Rate", `1 USD = ${quote ? parseFloat(quote.client_rate).toFixed(2) : "..."} KES`], ["Fee", "Free ✓"], ["Delivery", "~2 min via M-Pesa"], ["Recipient", mpesaName?.name || selectedRecipient?.full_name || "—"], ["Phone", fullPhone]].map(([k, v]) => (
+              {[["Rate", `1 USD = ${quote ? parseFloat(quote.client_rate).toFixed(2) : "..."} KES`], ["Fee", "Free ✓"], ["Delivery method", deliveryMethod === "mpesa" ? "📱 M-Pesa" : "🏦 Bank Transfer"],
+                ["Estimated time", "~2 minutes"], ["Recipient", mpesaName?.name || selectedRecipient?.full_name || "—"], ["Phone", fullPhone]].map(([k, v]) => (
                 <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "5px 0", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
                   <span style={{ color: "rgba(255,255,255,0.7)" }}>{k}</span>
                   <span style={{ fontWeight: 600 }}>{v}</span>
@@ -357,5 +375,3 @@ export default function SendMoney({ user, onDone }) {
     </div>
   );
 }
-
-

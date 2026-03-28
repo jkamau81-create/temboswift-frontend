@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+﻿const fs = require('fs');
+const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -42,4 +43,6 @@
       });
     </script>
   </body>
-</html>
+</html>`;
+fs.writeFileSync('public/index.html', html, 'utf8');
+console.log('index.html restored');

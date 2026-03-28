@@ -1,22 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import CardManager from "./CardManager";
 import SendMoney from "./SendMoney";
+import Receipt from "./Receipt";
 
 const API = "https://temboswift-backend.onrender.com/api";
 
-// ── Theme ──────────────────────────────────────────────────────────────────
 const G = {
   green: "#0b5e35", greenDark: "#093d28", greenLight: "#f0faf5",
   greenMid: "#1a7a4a", acc: "#f5a623",
-  bg: "#f5f0e8", white: "#ffffff", card: "#ffffff",
-  border: "#e8e3d8", borderLight: "#f0ebe0",
+  bg: "#f5f0e8", white: "#ffffff",
+  border: "#e8e3d8",
   text: "#111111", muted: "#666666", light: "#999999",
   red: "#dc2626", redLight: "#fef2f2",
-  blue: "#2563eb", blueLight: "#eff6ff",
   font: "'DM Sans', sans-serif",
 };
 
-// ── API ────────────────────────────────────────────────────────────────────
 const api = {
   async req(path, opts = {}) {
     const token = localStorage.getItem("ts_token");
@@ -39,11 +37,14 @@ const api = {
   kycStart: () => api.req("/kyc/start", { method: "POST" }),
   kycStatus: () => api.req("/kyc/status"),
   sendOtp: (phone) => api.req("/auth/phone/send-otp", { method: "POST", body: JSON.stringify({ phone }) }),
-  sendVerification: () => api.req("/auth/send-verification", { method: "POST" }),
   verifyOtp: (otp) => api.req("/auth/phone/verify-otp", { method: "POST", body: JSON.stringify({ otp }) }),
+  sendVerification: () => api.req("/auth/send-verification", { method: "POST" }),
+  getCard: () => api.req("/cards"),
+  setupCard: () => api.req("/cards/setup", { method: "POST" }),
+  saveCard: (payment_method_id) => api.req("/cards/save", { method: "POST", body: JSON.stringify({ payment_method_id }) }),
+  deleteCard: () => api.req("/cards", { method: "DELETE" }),
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 const statusConfig = {
   delivered: { color: G.green, bg: "#dcfce7", label: "Delivered", icon: "fa-check-circle" },
   pending: { color: "#92400e", bg: "#fef3c7", label: "Pending", icon: "fa-clock" },
@@ -105,15 +106,15 @@ const Card = ({ children, style = {} }) => (
   </div>
 );
 
-// ── AUTH SCREEN ────────────────────────────────────────────────────────────
+// ── AUTH SCREEN ──────────────────────────────────────────────────────────────
 function AuthScreen({ onLogin }) {
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ email: "", password: "", full_name: "", phone: "" });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState("");
   const [registered, setRegistered] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
 
   const submit = async () => {
@@ -132,7 +133,7 @@ function AuthScreen({ onLogin }) {
           await api.sendOtp(form.phone).catch(() => {});
           setOtpSent(true);
         } else {
-          setOtpSent(true);
+          onLogin(data.user);
         }
       } else {
         await api.verifyOtp(otp);
@@ -145,14 +146,9 @@ function AuthScreen({ onLogin }) {
 
   return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${G.greenDark} 0%, ${G.greenMid} 50%, ${G.greenDark} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: G.font }}>
-      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
       <div style={{ width: "100%", maxWidth: 400 }}>
-        {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ width: 64, height: 64, background: "rgba(255,255,255,0.1)", borderRadius: 20, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", border: "1px solid rgba(255,255,255,0.2)" }}>
-            <i className="fas fa-paper-plane" style={{ fontSize: 28, color: "#4cde8f" }}></i>
-          </div>
+          <img src="/logo.png" alt="TemboSwift" style={{ height: 100, width: "auto", margin: "0 auto 16px", display: "block", filter: "brightness(0) invert(1)", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
           <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", fontFamily: "'Playfair Display', serif" }}>
             Tembo<span style={{ color: "#4cde8f" }}>Swift</span>
           </div>
@@ -160,10 +156,9 @@ function AuthScreen({ onLogin }) {
         </div>
 
         <Card style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
-          {/* Tabs */}
           <div style={{ display: "flex", background: G.bg, borderRadius: 10, padding: 4, marginBottom: 24 }}>
             {["login", "register"].map(m => (
-              <button key={m} onClick={() => setMode(m)}
+              <button key={m} onClick={() => { setMode(m); setError(""); setOtpSent(false); setRegistered(false); }}
                 style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: mode === m ? G.white : "transparent", color: mode === m ? G.text : G.muted, fontWeight: 600, fontSize: 14, cursor: "pointer", fontFamily: G.font, boxShadow: mode === m ? "0 1px 4px rgba(0,0,0,0.1)" : "none", transition: "all 0.2s" }}>
                 {m === "login" ? "Sign In" : "Create Account"}
               </button>
@@ -176,24 +171,31 @@ function AuthScreen({ onLogin }) {
             </div>
           )}
 
-          {mode === "register" && <Input label="Full Name" icon="fa-user" placeholder="Joseph Kamau" value={form.full_name} onChange={set("full_name")} />}
-          {mode === "register" && <Input label="Phone Number" icon="fa-mobile-alt" type="tel" placeholder="+1 214 304 5008" value={form.phone} onChange={set("phone")} />}
-          <Input label="Email Address" icon="fa-envelope" type="email" placeholder="you@example.com" value={form.email} onChange={set("email")} />
-          <Input label="Password" icon="fa-lock" type="password" placeholder="••••••••" value={form.password} onChange={set("password")} onKeyDown={e => e.key === "Enter" && submit()} />
-          {otpSent && (
+          {!otpSent ? (
+            <>
+              {mode === "register" && <Input label="Full Name" icon="fa-user" placeholder="Joseph Kamau" value={form.full_name} onChange={set("full_name")} />}
+              {mode === "register" && <Input label="Phone Number" icon="fa-mobile-alt" type="tel" placeholder="+1 214 304 5008" value={form.phone} onChange={set("phone")} />}
+              <Input label="Email Address" icon="fa-envelope" type="email" placeholder="you@example.com" value={form.email} onChange={set("email")} />
+              <Input label="Password" icon="fa-lock" type="password" placeholder="••••••••" value={form.password} onChange={set("password")} onKeyDown={e => e.key === "Enter" && submit()} />
+            </>
+          ) : (
             <div>
-              <div style={{ background: "#f0faf5", border: "1px solid #0b5e3533", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "#0b5e35" }}>
-                <i className="fas fa-envelope"></i> Verification email sent to {form.email}. {form.phone && "SMS code sent to " + form.phone}
+              <div style={{ background: G.greenLight, border: `1px solid ${G.green}33`, borderRadius: 10, padding: "12px 14px", marginBottom: 16, fontSize: 13, color: G.green }}>
+                <i className="fas fa-envelope"></i> Verification email sent to <strong>{form.email}</strong>
+                {form.phone && <div style={{ marginTop: 4 }}><i className="fas fa-sms"></i> SMS code sent to {form.phone}</div>}
               </div>
-              <Input label="Verification Code" icon="fa-key" placeholder="Enter 6-digit code" value={otp} onChange={e => setOtp(e.target.value)} />
+              <Input label="Verification Code (if received by SMS)" icon="fa-key" placeholder="Enter 6-digit code" value={otp} onChange={e => setOtp(e.target.value)} />
+              <div style={{ fontSize: 12, color: G.muted, marginBottom: 16 }}>Or click the link in your email to verify.</div>
             </div>
           )}
 
           <Btn onClick={submit} disabled={loading} full style={{ marginTop: 8 }}>
-            {loading ? <><i className="fas fa-spinner fa-spin"></i> Please wait...</> : mode === "login" ? <><i className="fas fa-sign-in-alt"></i> Sign In</> : otpSent ? <><i className="fas fa-check"></i> Verify Phone</> : <><i className="fas fa-user-plus"></i> Create Account</>}
+            {loading ? <><i className="fas fa-spinner fa-spin"></i> Please wait...</>
+              : mode === "login" ? <><i className="fas fa-sign-in-alt"></i> Sign In</>
+              : otpSent ? <><i className="fas fa-check"></i> Verify & Continue</>
+              : <><i className="fas fa-user-plus"></i> Create Account</>}
           </Btn>
         </Card>
-
         <div style={{ textAlign: "center", marginTop: 16, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
           <i className="fas fa-shield-alt"></i> 256-bit encrypted · FinCEN registered · Your money is safe
         </div>
@@ -202,7 +204,7 @@ function AuthScreen({ onLogin }) {
   );
 }
 
-// ── DASHBOARD ──────────────────────────────────────────────────────────────
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard({ user, setPage }) {
   const [transfers, setTransfers] = useState([]);
   const [quote, setQuote] = useState(null);
@@ -220,10 +222,8 @@ function Dashboard({ user, setPage }) {
 
   return (
     <div style={{ fontFamily: G.font }}>
-      {/* Welcome */}
       <div style={{ background: `linear-gradient(135deg, ${G.greenDark}, ${G.greenMid})`, borderRadius: 20, padding: 24, marginBottom: 20, color: "#fff", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", right: -20, top: -20, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }}></div>
-        <div style={{ position: "absolute", right: 20, bottom: -30, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }}></div>
         <div style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>Welcome back 👋</div>
         <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 16 }}>{user?.full_name?.split(" ")[0] || "there"}</div>
         <div style={{ display: "flex", gap: 20 }}>
@@ -241,7 +241,6 @@ function Dashboard({ user, setPage }) {
         </div>
       </div>
 
-      {/* KYC warning */}
       {user?.kyc_status !== "approved" && (
         <div style={{ background: "#fef3c7", border: "1px solid #f59e0b33", borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
           <i className="fas fa-exclamation-triangle" style={{ color: "#d97706", fontSize: 18, flexShrink: 0 }}></i>
@@ -253,7 +252,17 @@ function Dashboard({ user, setPage }) {
         </div>
       )}
 
-      {/* Quick actions */}
+      {!user?.date_of_birth && (
+        <div style={{ background: G.blueLight || "#eff6ff", border: "1px solid #2563eb22", borderRadius: 12, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12 }}>
+          <i className="fas fa-user-edit" style={{ color: "#2563eb", fontSize: 18, flexShrink: 0 }}></i>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>Complete your profile</div>
+            <div style={{ fontSize: 12, color: "#1e40af" }}>Add date of birth & address to send money</div>
+          </div>
+          <button onClick={() => setPage("account")} style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 100, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Complete →</button>
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
         <button onClick={() => setPage("send")} style={{ background: G.green, color: "#fff", border: "none", borderRadius: 14, padding: 16, cursor: "pointer", textAlign: "left", fontFamily: G.font }}>
           <i className="fas fa-paper-plane" style={{ fontSize: 22, marginBottom: 8, display: "block" }}></i>
@@ -267,7 +276,6 @@ function Dashboard({ user, setPage }) {
         </button>
       </div>
 
-      {/* Live rate card */}
       {quote && (
         <Card style={{ marginBottom: 20, background: G.greenLight, border: `1px solid ${G.green}22` }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: G.green, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
@@ -283,7 +291,6 @@ function Dashboard({ user, setPage }) {
         </Card>
       )}
 
-      {/* Recent transfers */}
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <span><i className="fas fa-history" style={{ color: G.green, marginRight: 8 }}></i>Recent Transfers</span>
         <button onClick={() => setPage("history")} style={{ background: "none", border: "none", color: G.green, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>See all</button>
@@ -314,7 +321,7 @@ function Dashboard({ user, setPage }) {
   );
 }
 
-// ── RECIPIENTS ─────────────────────────────────────────────────────────────
+// ── RECIPIENTS ────────────────────────────────────────────────────────────────
 function Recipients() {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -403,7 +410,7 @@ function Recipients() {
   );
 }
 
-// ── HISTORY ────────────────────────────────────────────────────────────────
+// ── HISTORY ──────────────────────────────────────────────────────────────────
 function History() {
   const [transfers, setTransfers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -419,8 +426,6 @@ function History() {
   return (
     <div style={{ fontFamily: G.font }}>
       <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 16 }}><i className="fas fa-history" style={{ color: G.green, marginRight: 8 }}></i>Transfer History</div>
-
-      {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
         <Card style={{ background: G.greenLight, border: `1px solid ${G.green}22` }}>
           <div style={{ fontSize: 11, color: G.green, fontWeight: 600, marginBottom: 4 }}>TOTAL SENT</div>
@@ -431,8 +436,6 @@ function History() {
           <div style={{ fontSize: 22, fontWeight: 900 }}>{transfers.length}</div>
         </Card>
       </div>
-
-      {/* Filters */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
         {["all", "delivered", "pending", "failed"].map(f => (
           <button key={f} onClick={() => setFilter(f)}
@@ -441,7 +444,6 @@ function History() {
           </button>
         ))}
       </div>
-
       {loading ? (
         <div style={{ textAlign: "center", padding: 40 }}><i className="fas fa-spinner fa-spin" style={{ fontSize: 24, color: G.muted }}></i></div>
       ) : shown.length === 0 ? (
@@ -471,7 +473,32 @@ function History() {
   );
 }
 
-// ── ACCOUNT ────────────────────────────────────────────────────────────────
+// ── KYC BUTTON ────────────────────────────────────────────────────────────────
+function KycVerifyButton({ user }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const startKyc = async () => {
+    setLoading(true); setError("");
+    try {
+      const d = await api.kycStart();
+      if (d.status === "approved") { alert("Your identity is already verified!"); setLoading(false); return; }
+      if (d.url) window.location.href = d.url;
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div>
+      {error && <div style={{ color: G.red, fontSize: 13, marginBottom: 12 }}>{error}</div>}
+      <Btn onClick={startKyc} disabled={loading} full>
+        {loading ? <><i className="fas fa-spinner fa-spin"></i> Loading...</> : <><i className="fas fa-id-card"></i> Start Verification</>}
+      </Btn>
+    </div>
+  );
+}
+
+// ── ACCOUNT ──────────────────────────────────────────────────────────────────
 function Account({ user, logout, onNavigate }) {
   const [section, setSection] = useState(null);
   const [fields, setFields] = useState({ full_name: user?.full_name || "", address: user?.address || "", date_of_birth: user?.date_of_birth?.substring?.(0, 10) || "" });
@@ -486,8 +513,8 @@ function Account({ user, logout, onNavigate }) {
     setSaving(true);
     try {
       await api.updateMe(fields);
-      setMsg("Profile saved!"); setTimeout(() => { setMsg(""); window.location.reload(); }, 1500);
-    } catch (e) { setMsg("Failed to save"); }
+      setMsg("✅ Profile saved!"); setTimeout(() => { setMsg(""); window.location.reload(); }, 1500);
+    } catch (e) { setMsg("❌ Failed to save"); }
     finally { setSaving(false); }
   };
 
@@ -500,10 +527,8 @@ function Account({ user, logout, onNavigate }) {
 
   const verifyOtp = async () => {
     setSaving(true);
-    try {
-      await api.verifyOtp(otp);
-      setMsg("Phone verified!"); setTimeout(() => window.location.reload(), 1500);
-    } catch (e) { setMsg("Invalid code"); }
+    try { await api.verifyOtp(otp); setMsg("✅ Phone verified!"); setTimeout(() => window.location.reload(), 1500); }
+    catch (e) { setMsg("Invalid code"); }
     finally { setSaving(false); }
   };
 
@@ -513,11 +538,12 @@ function Account({ user, logout, onNavigate }) {
     { q: "What is the exchange rate?", a: "Live mid-market rate with 0.8% spread — best in market." },
     { q: "What is the maximum transfer?", a: "Maximum single transfer is $10,000." },
     { q: "Is my money safe?", a: "Yes. 256-bit encryption and Stripe payments protect every transfer." },
+    { q: "How do I verify my identity?", a: "Go to Account → KYC Verification and follow the steps. You'll need a government ID." },
   ];
 
   const menuItems = [
     { icon: "fa-user", label: "Personal Details", sub: "Name, address, date of birth", section: "personal" },
-    { icon: "fa-chart-bar", label: "Transfer Limits", sub: "$10,000 per transfer", section: "limits" },
+    { icon: "fa-chart-bar", label: "Transfer Limits", sub: user?.kyc_status === "approved" ? "$10,000 per transfer" : "Verify ID to unlock", section: "limits" },
     { icon: "fa-credit-card", label: "Manage Cards", sub: "Add or remove payment cards", section: "cards" },
     { icon: "fa-id-card", label: "KYC Verification", sub: user?.kyc_status === "approved" ? "✅ Verified" : "⚠️ Action required", section: "kyc" },
   ];
@@ -528,26 +554,26 @@ function Account({ user, logout, onNavigate }) {
     { icon: "fa-envelope", label: "Email Support", sub: "support@temboswift.com", action: () => window.open("mailto:support@temboswift.com") },
   ];
 
-  const BackBtn = ({ onClick }) => (
-    <button onClick={onClick} style={{ background: "none", border: "none", color: G.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, marginBottom: 20, padding: 0 }}>
+  const BackBtn = () => (
+    <button onClick={() => setSection(null)} style={{ background: "none", border: "none", color: G.muted, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 14, fontWeight: 600, marginBottom: 20, padding: 0 }}>
       <i className="fas fa-arrow-left"></i> Back
     </button>
   );
 
   if (section === "personal") return (
     <div style={{ fontFamily: G.font }}>
-      <BackBtn onClick={() => setSection(null)} />
+      <BackBtn />
       <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-user" style={{ color: G.green, marginRight: 8 }}></i>Personal Details</div>
-      {msg && <div style={{ background: msg.includes("!") ? G.greenLight : G.redLight, color: msg.includes("!") ? G.green : G.red, padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
+      {msg && <div style={{ background: msg.includes("✅") ? G.greenLight : G.redLight, color: msg.includes("✅") ? G.green : G.red, padding: "10px 14px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>{msg}</div>}
       <Card style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: G.green, marginBottom: 16 }}>BASIC INFO</div>
         <Input label="Full Name" icon="fa-user" value={fields.full_name} onChange={e => setFields(f => ({ ...f, full_name: e.target.value }))} placeholder="Your legal name" />
-        <Input label="Address" icon="fa-map-marker-alt" value={fields.address} onChange={e => setFields(f => ({ ...f, address: e.target.value }))} placeholder="Your home address" />
+        <Input label="Address" icon="fa-map-marker-alt" value={fields.address} onChange={e => setFields(f => ({ ...f, address: e.target.value }))} placeholder="Street, City, State, ZIP, Country" />
         <Input label="Date of Birth" icon="fa-calendar" type="date" value={fields.date_of_birth} onChange={e => setFields(f => ({ ...f, date_of_birth: e.target.value }))} />
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: G.muted, marginBottom: 6, textTransform: "uppercase" }}>Email Address</div>
-          <div style={{ background: G.bg, border: `1px solid ${G.border}`, borderRadius: 10, padding: "12px 14px", color: G.muted, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
-            <i className="fas fa-envelope" style={{ color: G.muted }}></i> {user?.email}
+          <div style={{ background: G.bg, border: `1px solid ${G.border}`, borderRadius: 10, padding: "12px 14px", color: G.muted, fontSize: 15 }}>
+            <i className="fas fa-envelope" style={{ marginRight: 8 }}></i>{user?.email}
           </div>
         </div>
         <Btn onClick={saveProfile} disabled={saving} full>
@@ -556,18 +582,18 @@ function Account({ user, logout, onNavigate }) {
       </Card>
       <Card>
         <div style={{ fontSize: 13, fontWeight: 700, color: G.green, marginBottom: 16 }}>
-          MOBILE NUMBER {user?.phone_verified ? <span style={{ color: G.green }}>✅ Verified</span> : <span style={{ color: "#d97706" }}>⚠️ Not verified</span>}
+          PHONE {user?.phone_verified ? <span style={{ color: G.green }}>✅ Verified</span> : <span style={{ color: "#d97706" }}>⚠️ Not verified</span>}
         </div>
         <Input icon="fa-mobile-alt" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+12143045008" />
         {!otpSent ? (
           <Btn variant="outline" onClick={sendOtp} disabled={saving} full>
-            {saving ? <><i className="fas fa-spinner fa-spin"></i> Sending...</> : <><i className="fas fa-sms"></i> Send Verification Code</>}
+            <i className="fas fa-sms"></i> Send Verification Code
           </Btn>
         ) : (
           <>
             <Input icon="fa-key" value={otp} onChange={e => setOtp(e.target.value)} placeholder="Enter 6-digit code" />
             <Btn onClick={verifyOtp} disabled={saving} full>
-              {saving ? <><i className="fas fa-spinner fa-spin"></i> Verifying...</> : <><i className="fas fa-check"></i> Verify Code</>}
+              <i className="fas fa-check"></i> Verify Code
             </Btn>
           </>
         )}
@@ -575,13 +601,17 @@ function Account({ user, logout, onNavigate }) {
     </div>
   );
 
-      if (section === "cards") return (<CardManager onBack={() => setSection(null)} />);
+  if (section === "cards") return (<CardManager onBack={() => setSection(null)} />);
+
   if (section === "limits") return (
     <div style={{ fontFamily: G.font }}>
-      <BackBtn onClick={() => setSection(null)} />
+      <BackBtn />
       <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-chart-bar" style={{ color: G.green, marginRight: 8 }}></i>Transfer Limits</div>
       <Card>
-        {[["Single transfer", "$10,000"], ["Daily limit", "$10,000"], ["Monthly limit", "$50,000"], ["Minimum transfer", "$5"]].map(([k, v]) => (
+        {[["Single transfer", user?.kyc_status === "approved" ? "$10,000" : "$0 (KYC required)"],
+          ["Daily limit", user?.kyc_status === "approved" ? "$10,000" : "Pending KYC"],
+          ["Monthly limit", user?.kyc_status === "approved" ? "$50,000" : "Pending KYC"],
+          ["Minimum transfer", "$5"]].map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${G.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <i className="fas fa-arrow-right" style={{ color: G.green, fontSize: 12 }}></i>
@@ -596,38 +626,48 @@ function Account({ user, logout, onNavigate }) {
 
   if (section === "kyc") return (
     <div style={{ fontFamily: G.font }}>
-      <BackBtn onClick={() => setSection(null)} />
+      <BackBtn />
       <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-id-card" style={{ color: G.green, marginRight: 8 }}></i>Identity Verification</div>
       <Card style={{ textAlign: "center", padding: 32 }}>
         <i className="fas fa-shield-alt" style={{ fontSize: 48, color: G.green, marginBottom: 16, display: "block" }}></i>
         <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>
           {user?.kyc_status === "approved" ? "Identity Verified ✅" : "Verify Your Identity"}
         </div>
-        <div style={{ fontSize: 14, color: G.muted, marginBottom: 24, lineHeight: 1.6 }}>
-          {user?.kyc_status === "approved" ? "Your identity has been verified. You can send up to $10,000 per transfer." : "Required to send money. Takes about 2 minutes with a government ID."}
+        <div style={{ fontSize: 14, color: G.muted, marginBottom: 20, lineHeight: 1.6 }}>
+          {user?.kyc_status === "approved" ? "Your identity has been verified. You can send up to $10,000 per transfer." : "Required by US law to send money. Takes 2 minutes with a government ID or passport."}
         </div>
         {user?.kyc_status !== "approved" && (
-          <Btn onClick={async () => { try { const d = await api.kycStart(); if (d.url) window.open(d.url, "_blank"); } catch (e) {} }} full>
-            <i className="fas fa-id-card"></i> Start Verification
-          </Btn>
+          <div style={{ background: G.bg, borderRadius: 12, padding: 16, marginBottom: 20, textAlign: "left" }}>
+            {[["📋", "Prepare your ID", "Passport, driver license or national ID"],
+              ["🤳", "Take a selfie", "A quick photo to match your ID"],
+              ["✅", "Get verified", "Usually instant — sometimes up to 24 hours"]].map(([icon, title, desc]) => (
+              <div key={title} style={{ display: "flex", gap: 12, marginBottom: 12 }}>
+                <span style={{ fontSize: 20 }}>{icon}</span>
+                <div><div style={{ fontSize: 13, fontWeight: 700 }}>{title}</div><div style={{ fontSize: 12, color: G.muted }}>{desc}</div></div>
+              </div>
+            ))}
+          </div>
         )}
+        {user?.kyc_status !== "approved" && <KycVerifyButton user={user} />}
       </Card>
     </div>
   );
 
   if (section === "legal") return (
     <div style={{ fontFamily: G.font }}>
-      <BackBtn onClick={() => setSection(null)} />
+      <BackBtn />
       <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-balance-scale" style={{ color: G.green, marginRight: 8 }}></i>Legal Information</div>
       <Card>
-        {[["Privacy Policy", "fa-lock", "https://temboswift.com/privacy.html"], ["Terms of Service", "fa-file-alt", "https://temboswift.com/terms.html"], ["Licenses & Compliance", "fa-landmark", "https://temboswift.com/privacy.html"]].map(([label, icon, url]) => (
-          <div key={label} onClick={() => window.open(url)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${G.border}`, cursor: "pointer" }}>
+        {[["Privacy Policy", "fa-lock", "https://temboswift.com/privacy.html"],
+          ["Terms of Service", "fa-file-alt", "https://temboswift.com/terms.html"],
+          ["Licenses & Compliance", "fa-landmark", "https://temboswift.com/privacy.html"]].map(([label, icon, url]) => (
+          <a key={label} href={url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${G.border}`, textDecoration: "none", color: G.text, WebkitTapHighlightColor: "transparent" }}>
             <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <i className={`fas ${icon}`} style={{ color: G.green }}></i>
             </div>
             <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{label}</div>
-            <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>
-          </div>
+            <i className="fas fa-external-link-alt" style={{ color: G.muted, fontSize: 12 }}></i>
+          </a>
         ))}
       </Card>
     </div>
@@ -635,7 +675,7 @@ function Account({ user, logout, onNavigate }) {
 
   if (section === "faqs") return (
     <div style={{ fontFamily: G.font }}>
-      <BackBtn onClick={() => setSection(null)} />
+      <BackBtn />
       <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-question-circle" style={{ color: G.green, marginRight: 8 }}></i>FAQs</div>
       <Card>
         {faqs.map((faq, i) => (
@@ -653,7 +693,6 @@ function Account({ user, logout, onNavigate }) {
 
   return (
     <div style={{ fontFamily: G.font }}>
-      {/* Profile header */}
       <div style={{ background: `linear-gradient(135deg, ${G.greenDark}, ${G.greenMid})`, borderRadius: 20, padding: 24, marginBottom: 20, color: "#fff", textAlign: "center" }}>
         <div style={{ width: 72, height: 72, background: "rgba(255,255,255,0.15)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px", border: "2px solid rgba(255,255,255,0.3)" }}>
           <span style={{ fontSize: 24, fontWeight: 800 }}>{(user?.full_name || "U").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}</span>
@@ -666,11 +705,10 @@ function Account({ user, logout, onNavigate }) {
         </div>
       </div>
 
-      {/* Account section */}
       <div style={{ fontSize: 11, fontWeight: 700, color: G.muted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Account</div>
       <Card style={{ marginBottom: 16 }}>
         {menuItems.map((item, i) => (
-          <div key={item.label} onClick={() => item.section && setSection(item.section)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: i < menuItems.length - 1 ? `1px solid ${G.border}` : "none", cursor: item.section ? "pointer" : "default" }}>
+          <div key={item.label} onClick={() => setSection(item.section)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: i < menuItems.length - 1 ? `1px solid ${G.border}` : "none", cursor: "pointer" }}>
             <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <i className={`fas ${item.icon}`} style={{ color: G.green }}></i>
             </div>
@@ -678,7 +716,7 @@ function Account({ user, logout, onNavigate }) {
               <div style={{ fontSize: 14, fontWeight: 700 }}>{item.label}</div>
               <div style={{ fontSize: 12, color: G.muted, marginTop: 2 }}>{item.sub}</div>
             </div>
-            {item.section && <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>}
+            <i className="fas fa-chevron-right" style={{ color: G.muted, fontSize: 12 }}></i>
           </div>
         ))}
       </Card>
@@ -713,7 +751,7 @@ function Account({ user, logout, onNavigate }) {
         </div>
       </Card>
 
-      <div style={{ textAlign: "center", fontSize: 12, color: G.muted, marginBottom: 16 }}>TemboSwift v1.0.0 · US → Kenya</div>
+      <div style={{ textAlign: "center", fontSize: 12, color: G.muted, marginBottom: 16 }}>TemboSwift v1.0.0 · US → Kenya · Zero Fees</div>
 
       <button onClick={logout} style={{ width: "100%", background: G.redLight, border: `1px solid ${G.red}33`, borderRadius: 12, padding: 14, fontSize: 14, fontWeight: 700, color: G.red, cursor: "pointer", fontFamily: G.font, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 40 }}>
         <i className="fas fa-sign-out-alt"></i> Sign Out
@@ -722,7 +760,7 @@ function Account({ user, logout, onNavigate }) {
   );
 }
 
-// ── BOTTOM NAV ─────────────────────────────────────────────────────────────
+// ── BOTTOM NAV ────────────────────────────────────────────────────────────────
 const NAV = [
   { id: "dashboard", icon: "fa-home", label: "Home" },
   { id: "send", icon: "fa-paper-plane", label: "Send" },
@@ -731,7 +769,7 @@ const NAV = [
   { id: "account", icon: "fa-user-circle", label: "Account" },
 ];
 
-// ── MAIN APP ───────────────────────────────────────────────────────────────
+// ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
   const [page, setPage] = useState("dashboard");
@@ -746,11 +784,9 @@ export default function App() {
 
   if (checking) return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${G.greenDark}, ${G.greenMid})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: G.font }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
       <div style={{ textAlign: "center", color: "#fff" }}>
-        <i className="fas fa-paper-plane" style={{ fontSize: 40, color: "#4cde8f", marginBottom: 16, display: "block" }}></i>
-        <i className="fas fa-spinner fa-spin" style={{ fontSize: 20 }}></i>
+        <img src="/logo.png" alt="TemboSwift" style={{ height: 100, width: "auto", filter: "brightness(0) invert(1)", marginBottom: 20, objectFit: "contain" }} onError={e => e.target.style.display = "none"} />
+        <div><i className="fas fa-spinner fa-spin" style={{ fontSize: 20 }}></i></div>
       </div>
     </div>
   );
@@ -761,7 +797,7 @@ export default function App() {
 
   const pages = {
     dashboard: <Dashboard user={user} setPage={setPage} />,
-    send: <SendMoney user={user} onDone={() => setPage("dashboard")} />,
+    send: <SendMoney user={user} setPage={setPage} onDone={() => setPage("dashboard")} />,
     recipients: <Recipients />,
     history: <History />,
     account: <Account user={user} logout={logout} onNavigate={setPage} />,
@@ -772,27 +808,20 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
-      {/* Header */}
       <div style={{ background: G.green, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
-        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 800, color: "#fff" }}>
-          Tembo<span style={{ color: "#4cde8f" }}>Swift</span>
-        </div>
+        <img src="/logo.png" alt="TemboSwift" style={{ height: 44, width: "auto", filter: "brightness(0) invert(1)", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }} />
+        <div style={{ display: "none", fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 800, color: "#fff" }}>Tembo<span style={{ color: "#4cde8f" }}>Swift</span></div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", background: "rgba(255,255,255,0.1)", padding: "4px 10px", borderRadius: 100, fontWeight: 600 }}>
             <i className="fas fa-bolt" style={{ color: "#4cde8f", marginRight: 4 }}></i>LIVE
           </div>
-          <button onClick={logout} style={{ background: "rgba(255,255,255,0.1)", border: "none", color: "#fff", width: 32, height: 32, borderRadius: "50%", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <i className="fas fa-sign-out-alt" style={{ fontSize: 12 }}></i>
-          </button>
         </div>
       </div>
 
-      {/* Content */}
-      <div style={{ padding: "20px 16px 100px" }}>
+      <div style={{ padding: "20px 16px 120px" }}>
         {pages[page]}
       </div>
 
-      {/* Bottom Nav */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 480, background: "#fff", borderTop: `1px solid ${G.border}`, display: "flex", zIndex: 50, boxShadow: "0 -4px 20px rgba(0,0,0,0.08)" }}>
         {NAV.map(n => (
           <button key={n.id} onClick={() => setPage(n.id)}
@@ -807,12 +836,3 @@ export default function App() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-

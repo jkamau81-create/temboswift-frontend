@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import CardManager from "./CardManager";
+import SendMoney from "./SendMoney";
 
 const API = "https://temboswift-backend.onrender.com/api";
 
@@ -37,6 +39,7 @@ const api = {
   kycStart: () => api.req("/kyc/start", { method: "POST" }),
   kycStatus: () => api.req("/kyc/status"),
   sendOtp: (phone) => api.req("/auth/phone/send-otp", { method: "POST", body: JSON.stringify({ phone }) }),
+  sendVerification: () => api.req("/auth/send-verification", { method: "POST" }),
   verifyOtp: (otp) => api.req("/auth/phone/verify-otp", { method: "POST", body: JSON.stringify({ otp }) }),
 };
 
@@ -105,7 +108,10 @@ const Card = ({ children, style = {} }) => (
 // ── AUTH SCREEN ────────────────────────────────────────────────────────────
 function AuthScreen({ onLogin }) {
   const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ email: "", password: "", full_name: "" });
+  const [form, setForm] = useState({ email: "", password: "", full_name: "", phone: "" });
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [registered, setRegistered] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const set = k => e => setForm(f => ({ ...f, [k]: e.target.value }));
@@ -113,11 +119,26 @@ function AuthScreen({ onLogin }) {
   const submit = async () => {
     setLoading(true); setError("");
     try {
-      const data = mode === "login"
-        ? await api.login({ email: form.email, password: form.password })
-        : await api.register(form);
-      localStorage.setItem("ts_token", data.token);
-      onLogin(data.user);
+      if (mode === "login") {
+        const data = await api.login({ email: form.email, password: form.password });
+        localStorage.setItem("ts_token", data.token);
+        onLogin(data.user);
+      } else if (!registered) {
+        const data = await api.register(form);
+        localStorage.setItem("ts_token", data.token);
+        setRegistered(true);
+        await api.sendVerification().catch(() => {});
+        if (form.phone) {
+          await api.sendOtp(form.phone).catch(() => {});
+          setOtpSent(true);
+        } else {
+          setOtpSent(true);
+        }
+      } else {
+        await api.verifyOtp(otp);
+        const me = await api.me();
+        onLogin(me.user);
+      }
     } catch (e) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -156,11 +177,20 @@ function AuthScreen({ onLogin }) {
           )}
 
           {mode === "register" && <Input label="Full Name" icon="fa-user" placeholder="Joseph Kamau" value={form.full_name} onChange={set("full_name")} />}
+          {mode === "register" && <Input label="Phone Number" icon="fa-mobile-alt" type="tel" placeholder="+1 214 304 5008" value={form.phone} onChange={set("phone")} />}
           <Input label="Email Address" icon="fa-envelope" type="email" placeholder="you@example.com" value={form.email} onChange={set("email")} />
           <Input label="Password" icon="fa-lock" type="password" placeholder="••••••••" value={form.password} onChange={set("password")} onKeyDown={e => e.key === "Enter" && submit()} />
+          {otpSent && (
+            <div>
+              <div style={{ background: "#f0faf5", border: "1px solid #0b5e3533", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 13, color: "#0b5e35" }}>
+                <i className="fas fa-envelope"></i> Verification email sent to {form.email}. {form.phone && "SMS code sent to " + form.phone}
+              </div>
+              <Input label="Verification Code" icon="fa-key" placeholder="Enter 6-digit code" value={otp} onChange={e => setOtp(e.target.value)} />
+            </div>
+          )}
 
           <Btn onClick={submit} disabled={loading} full style={{ marginTop: 8 }}>
-            {loading ? <><i className="fas fa-spinner fa-spin"></i> Please wait...</> : mode === "login" ? <><i className="fas fa-sign-in-alt"></i> Sign In</> : <><i className="fas fa-user-plus"></i> Create Account</>}
+            {loading ? <><i className="fas fa-spinner fa-spin"></i> Please wait...</> : mode === "login" ? <><i className="fas fa-sign-in-alt"></i> Sign In</> : otpSent ? <><i className="fas fa-check"></i> Verify Phone</> : <><i className="fas fa-user-plus"></i> Create Account</>}
           </Btn>
         </Card>
 
@@ -280,175 +310,6 @@ function Dashboard({ user, setPage }) {
           </div>
         </Card>
       ))}
-    </div>
-  );
-}
-
-// ── SEND MONEY ─────────────────────────────────────────────────────────────
-function SendMoney({ user }) {
-  const [step, setStep] = useState(1);
-  const [usd, setUsd] = useState("200");
-  const [quote, setQuote] = useState(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
-  const [recipients, setRecipients] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    api.recipients().then(d => {
-      setRecipients(d.recipients || []);
-      if (d.recipients?.length) setSelectedId(d.recipients[0].id);
-    }).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const amt = parseFloat(usd);
-    if (!amt || amt < 5) return;
-    setQuoteLoading(true);
-    const t = setTimeout(() => {
-      api.quote(amt).then(setQuote).catch(() => {}).finally(() => setQuoteLoading(false));
-    }, 600);
-    return () => clearTimeout(t);
-  }, [usd]);
-
-  const send = async () => {
-    if (user?.kyc_status !== "approved") { setError("KYC verification required. Go to Account → Verify Identity."); return; }
-    setLoading(true); setError("");
-    try {
-      await api.createTransfer({ recipient_id: selectedId, amount_usd: parseFloat(usd) });
-      setSuccess(true);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  };
-
-  if (success) return (
-    <div style={{ textAlign: "center", padding: "48px 20px", fontFamily: G.font }}>
-      <div style={{ width: 80, height: 80, background: G.greenLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
-        <i className="fas fa-check-circle" style={{ fontSize: 40, color: G.green }}></i>
-      </div>
-      <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Transfer Created!</div>
-      <div style={{ fontSize: 15, color: G.muted, marginBottom: 32 }}>Your transfer is being processed and will arrive shortly.</div>
-      <Btn onClick={() => { setSuccess(false); setStep(1); setUsd("200"); }}>
-        <i className="fas fa-plus"></i> Send Another
-      </Btn>
-    </div>
-  );
-
-  return (
-    <div style={{ fontFamily: G.font }}>
-      {/* Progress */}
-      <div style={{ display: "flex", alignItems: "center", marginBottom: 24, gap: 8 }}>
-        {[1, 2, 3].map((s, i) => (
-          <>
-            <div key={s} style={{ width: 28, height: 28, borderRadius: "50%", background: step >= s ? G.green : G.border, color: step >= s ? "#fff" : G.muted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{step > s ? <i className="fas fa-check"></i> : s}</div>
-            {i < 2 && <div style={{ flex: 1, height: 2, background: step > s ? G.green : G.border, borderRadius: 1 }}></div>}
-          </>
-        ))}
-      </div>
-
-      {error && <div style={{ background: G.redLight, border: `1px solid ${G.red}33`, borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: G.red, display: "flex", gap: 8, alignItems: "center" }}><i className="fas fa-exclamation-circle"></i> {error}</div>}
-
-      {step === 1 && (
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-dollar-sign" style={{ color: G.green, marginRight: 8 }}></i>How much to send?</div>
-          <Card style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, color: G.muted, marginBottom: 8, fontWeight: 600 }}>YOU SEND (USD)</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-              <span style={{ fontSize: 32, fontWeight: 900, color: G.green }}>$</span>
-              <input value={usd} onChange={e => setUsd(e.target.value)} type="number" style={{ flex: 1, border: "none", outline: "none", fontSize: 48, fontWeight: 900, color: G.text, fontFamily: G.font, background: "transparent" }} />
-            </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {[50, 100, 200, 500].map(n => (
-                <button key={n} onClick={() => setUsd(String(n))}
-                  style={{ padding: "6px 14px", borderRadius: 100, border: `1.5px solid ${usd === String(n) ? G.green : G.border}`, background: usd === String(n) ? G.greenLight : "transparent", color: usd === String(n) ? G.green : G.muted, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: G.font }}>
-                  ${n}
-                </button>
-              ))}
-            </div>
-          </Card>
-
-          {quoteLoading && <div style={{ textAlign: "center", padding: 16, color: G.muted }}><i className="fas fa-spinner fa-spin"></i> Getting live rate...</div>}
-          {quote && !quoteLoading && (
-            <Card style={{ background: G.greenLight, border: `1px solid ${G.green}22`, marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: G.green, marginBottom: 12 }}><i className="fas fa-chart-line"></i> Quote Summary</div>
-              {[
-                ["Exchange Rate", `1 USD = ${parseFloat(quote.client_rate).toFixed(2)} KES`, G.green],
-                ["Transfer Fee", "Free ✓", G.green],
-                ["Recipient Gets", `KES ${parseFloat(quote.amount_kes).toLocaleString()}`, G.text],
-              ].map(([k, v, c]) => (
-                <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${G.border}` }}>
-                  <span style={{ fontSize: 13, color: G.muted }}>{k}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: c }}>{v}</span>
-                </div>
-              ))}
-            </Card>
-          )}
-          <Btn onClick={() => setStep(2)} full disabled={!quote || parseFloat(usd) < 5}>
-            <i className="fas fa-arrow-right"></i> Choose Recipient
-          </Btn>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-users" style={{ color: G.green, marginRight: 8 }}></i>Who are you sending to?</div>
-          {recipients.length === 0 ? (
-            <Card style={{ textAlign: "center", padding: 32 }}>
-              <i className="fas fa-user-plus" style={{ fontSize: 32, color: G.border, marginBottom: 12, display: "block" }}></i>
-              <div style={{ color: G.muted, marginBottom: 16 }}>No recipients yet</div>
-              <div style={{ fontSize: 13, color: G.light }}>Add a recipient in the Recipients tab first</div>
-            </Card>
-          ) : recipients.map(r => (
-            <Card key={r.id} style={{ marginBottom: 10, cursor: "pointer", border: `2px solid ${selectedId === r.id ? G.green : G.border}`, background: selectedId === r.id ? G.greenLight : G.white }}
-              onClick={() => setSelectedId(r.id)}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <Avatar name={r.full_name} bg={selectedId === r.id ? G.green : G.border} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700 }}>{r.full_name}</div>
-                  <div style={{ fontSize: 13, color: G.muted }}><i className="fas fa-mobile-alt" style={{ marginRight: 4 }}></i>{r.phone}</div>
-                  <div style={{ fontSize: 11, color: G.green, fontWeight: 600, textTransform: "uppercase", marginTop: 2 }}><i className="fas fa-wallet" style={{ marginRight: 4 }}></i>{r.delivery_method || "M-Pesa"}</div>
-                </div>
-                {selectedId === r.id && <i className="fas fa-check-circle" style={{ color: G.green, fontSize: 22 }}></i>}
-              </div>
-            </Card>
-          ))}
-          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-            <Btn variant="ghost" onClick={() => setStep(1)}><i className="fas fa-arrow-left"></i> Back</Btn>
-            <Btn onClick={() => setStep(3)} full disabled={!selectedId}><i className="fas fa-arrow-right"></i> Review Transfer</Btn>
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (() => {
-        const recipient = recipients.find(r => r.id === selectedId);
-        return (
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 20 }}><i className="fas fa-check-circle" style={{ color: G.green, marginRight: 8 }}></i>Confirm Transfer</div>
-            <Card style={{ background: `linear-gradient(135deg, ${G.greenDark}, ${G.greenMid})`, color: "#fff", marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-                <div><div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>YOU SEND</div><div style={{ fontSize: 32, fontWeight: 900 }}>${usd}</div></div>
-                <div style={{ textAlign: "right" }}><div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>THEY RECEIVE</div><div style={{ fontSize: 22, fontWeight: 800, color: "#4cde8f" }}>KES {quote ? parseFloat(quote.amount_kes).toLocaleString() : "..."}</div></div>
-              </div>
-              <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 12, padding: 16 }}>
-                {[["Rate", `1 USD = ${quote ? parseFloat(quote.client_rate).toFixed(2) : "..."} KES`], ["Fee", "Free ✓"], ["Delivery", "~2 minutes"], ["To", recipient?.full_name], ["Via", "M-Pesa"]].map(([k, v]) => (
-                  <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-                    <span style={{ color: "rgba(255,255,255,0.7)" }}>{k}</span>
-                    <span style={{ fontWeight: 600 }}>{v}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            <div style={{ display: "flex", gap: 10 }}>
-              <Btn variant="ghost" onClick={() => setStep(2)}><i className="fas fa-arrow-left"></i> Back</Btn>
-              <Btn onClick={send} disabled={loading} full>
-                {loading ? <><i className="fas fa-spinner fa-spin"></i> Sending...</> : <><i className="fas fa-paper-plane"></i> Send Money</>}
-              </Btn>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -657,7 +518,7 @@ function Account({ user, logout, onNavigate }) {
   const menuItems = [
     { icon: "fa-user", label: "Personal Details", sub: "Name, address, date of birth", section: "personal" },
     { icon: "fa-chart-bar", label: "Transfer Limits", sub: "$10,000 per transfer", section: "limits" },
-    { icon: "fa-credit-card", label: "Manage Cards", sub: "Added when you transfer", section: null },
+    { icon: "fa-credit-card", label: "Manage Cards", sub: "Add or remove payment cards", section: "cards" },
     { icon: "fa-id-card", label: "KYC Verification", sub: user?.kyc_status === "approved" ? "✅ Verified" : "⚠️ Action required", section: "kyc" },
   ];
 
@@ -714,6 +575,7 @@ function Account({ user, logout, onNavigate }) {
     </div>
   );
 
+      if (section === "cards") return (<CardManager onBack={() => setSection(null)} />);
   if (section === "limits") return (
     <div style={{ fontFamily: G.font }}>
       <BackBtn onClick={() => setSection(null)} />
@@ -899,7 +761,7 @@ export default function App() {
 
   const pages = {
     dashboard: <Dashboard user={user} setPage={setPage} />,
-    send: <SendMoney user={user} />,
+    send: <SendMoney user={user} onDone={() => setPage("dashboard")} />,
     recipients: <Recipients />,
     history: <History />,
     account: <Account user={user} logout={logout} onNavigate={setPage} />,
@@ -945,3 +807,12 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

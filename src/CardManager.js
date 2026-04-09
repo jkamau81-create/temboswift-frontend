@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
-const stripePromise = loadStripe("pk_live_51T6QLQGZ5hG9oDBuQCrGqyDiBr2yW4uAhx7fZ8xZE6S6qglqvRluTzV2mLg08780HkeyYiZaTPS Kq6gYtHok80Hq00w6fVLRD8".replace(/ /g,""));
+const stripePromise = loadStripe("pk_live_51T6PRqGj3nnQolv43mhtOtfQ34vQsfIjtG3bnx2QbUp7KfEhFkChwVc40Tg6vuxsIFSWcFdEQF9qGNzfzUXPNyKO00QmmfJY43 Kq6gYtHok80Hq00w6fVLRD8".replace(/ /g,""));
 const API = "https://temboswift-backend.onrender.com/api";
 
 const G = { green: "#0b5e35", greenLight: "#f0faf5", border: "#e8e3d8", muted: "#666", light: "#999", text: "#111", red: "#dc2626", redLight: "#fef2f2" };
@@ -151,3 +151,5 @@ export default function CardManager({ onBack }) {
     </div>
   );
 }
+
+

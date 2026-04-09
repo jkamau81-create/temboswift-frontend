@@ -148,7 +148,7 @@ function AuthScreen({ onLogin }) {
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${G.greenDark} 0%, ${G.greenMid} 50%, ${G.greenDark} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: G.font }}>
       <div style={{ width: "100%", maxWidth: 400 }}>
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <img src="/logo.png" alt="TemboSwift" style={{ height: 100, width: "auto", margin: "0 auto 16px", display: "block", filter: "brightness(0) invert(1)", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; }} />
+          <img src="/logo.png" alt="TemboSwift" style={{ height: 80, width: "auto", margin: "0 auto 16px", display: "block", filter: "brightness(0) invert(1)" }} onError={e => { e.target.style.display = "none"; }} />
           <div style={{ fontSize: 28, fontWeight: 900, color: "#fff", fontFamily: "'Playfair Display', serif" }}>
             Tembo<span style={{ color: "#4cde8f" }}>Swift</span>
           </div>
@@ -611,7 +611,7 @@ function Account({ user, logout, onNavigate }) {
         {[["Single transfer", user?.kyc_status === "approved" ? "$10,000" : "$0 (KYC required)"],
           ["Daily limit", user?.kyc_status === "approved" ? "$10,000" : "Pending KYC"],
           ["Monthly limit", user?.kyc_status === "approved" ? "$50,000" : "Pending KYC"],
-          ["Minimum transfer", "$5"]].map(([k, v]) => (
+          ["Minimum transfer", "$1"]].map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: `1px solid ${G.border}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <i className="fas fa-arrow-right" style={{ color: G.green, fontSize: 12 }}></i>
@@ -661,7 +661,7 @@ function Account({ user, logout, onNavigate }) {
         {[["Privacy Policy", "fa-lock", "https://temboswift.com/privacy.html"],
           ["Terms of Service", "fa-file-alt", "https://temboswift.com/terms.html"],
           ["Licenses & Compliance", "fa-landmark", "https://temboswift.com/privacy.html"]].map(([label, icon, url]) => (
-          <a key={label} href={url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${G.border}`, textDecoration: "none", color: G.text, WebkitTapHighlightColor: "transparent" }}>
+          <a key={label} href={url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${G.border}`, textDecoration: "none", color: G.text }}>
             <div style={{ width: 40, height: 40, background: G.greenLight, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
               <i className={`fas ${icon}`} style={{ color: G.green }}></i>
             </div>
@@ -785,7 +785,7 @@ export default function App() {
   if (checking) return (
     <div style={{ minHeight: "100vh", background: `linear-gradient(160deg, ${G.greenDark}, ${G.greenMid})`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: G.font }}>
       <div style={{ textAlign: "center", color: "#fff" }}>
-        <img src="/logo.png" alt="TemboSwift" style={{ height: 100, width: "auto", filter: "brightness(0) invert(1)", marginBottom: 20, objectFit: "contain" }} onError={e => e.target.style.display = "none"} />
+        <img src="/logo.png" alt="TemboSwift" style={{ height: 80, filter: "brightness(0) invert(1)", marginBottom: 20 }} onError={e => e.target.style.display = "none"} />
         <div><i className="fas fa-spinner fa-spin" style={{ fontSize: 20 }}></i></div>
       </div>
     </div>
@@ -809,7 +809,7 @@ export default function App() {
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
       <div style={{ background: G.green, padding: "14px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50 }}>
-        <img src="/logo.png" alt="TemboSwift" style={{ height: 44, width: "auto", filter: "brightness(0) invert(1)", objectFit: "contain" }} onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }} />
+        <img src="/logo.png" alt="TemboSwift" style={{ height: 36, filter: "brightness(0) invert(1)" }} onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "block"; }} />
         <div style={{ display: "none", fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 800, color: "#fff" }}>Tembo<span style={{ color: "#4cde8f" }}>Swift</span></div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)", background: "rgba(255,255,255,0.1)", padding: "4px 10px", borderRadius: 100, fontWeight: 600 }}>
@@ -818,7 +818,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ padding: "20px 16px 120px" }}>
+      <div style={{ padding: "20px 16px 100px" }}>
         {pages[page]}
       </div>
 
@@ -836,3 +836,7 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
